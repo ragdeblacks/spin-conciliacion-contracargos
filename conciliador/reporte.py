@@ -59,9 +59,7 @@ def reporte_markdown(libro: LibroMayor, corrida_id: int) -> str:
             "|---|---|---|---|---:|---|",
         ]
         for d in pendientes:
-            lineas.append(
-                f"| {d['id']} | {d['accion']} | {d['referencia']} | {d['comercio_id']} | {centavos_a_texto(d['monto_centavos'])} | {d['motivo']} |"
-            )
+            lineas.append(f"| {d['id']} | {d['accion']} | {d['referencia']} | {d['comercio_id']} | {centavos_a_texto(d['monto_centavos'])} | {d['motivo']} |")
 
     excepciones = por_accion["EXCEPCION"]
     if excepciones:

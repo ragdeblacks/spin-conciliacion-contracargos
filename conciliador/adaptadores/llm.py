@@ -86,9 +86,7 @@ class AsistenteNulo:
     nombre: str = "nulo"
 
     def sugerir(self, contexto: ContextoExcepcion) -> SugerenciaTriaje:
-        causa, accion, conf = SUGERENCIAS_POR_MOTIVO.get(
-            contexto.motivo, ("Sin regla de triaje para este motivo", "ESCALAR_AL_BANCO", 0.3)
-        )
+        causa, accion, conf = SUGERENCIAS_POR_MOTIVO.get(contexto.motivo, ("Sin regla de triaje para este motivo", "ESCALAR_AL_BANCO", 0.3))
         if contexto.motivo == "SIN_MATCH" and contexto.candidatos:
             causa, accion, conf = "Hay transacciones parecidas en el Core: posible referencia truncada", "LIQUIDAR_MANUAL", 0.6
         return SugerenciaTriaje(

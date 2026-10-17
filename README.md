@@ -9,7 +9,8 @@ conciliación matutina entre los movimientos del banco adquirente y el Core de N
 - **Ejecución idempotente**: bloqueos de saldo por contracargo primero (hoy por la UI del Core, mañana por API), liquidaciones después (API REST con clave de idempotencia).
 - **Doble control** para montos altos y acumulación anómala; **tres modos** de adopción: sombra, asistida, autónoma.
 - **Triaje de excepciones asistido por IA**, fuera del camino crítico, con tokenización de datos sensibles, presupuesto y fallback determinista. Agnóstico al proveedor (Anthropic, OpenAI-compatible o ninguno).
-- **Libro mayor** append-only, **gates** críticos y no críticos, evidencia en capturas, reporte matutino y alertas.
+- **Libro mayor** append-only, **gates** críticos y no críticos, evidencia en capturas, reporte matutino.
+- **Observabilidad** detrás de un puerto de notificación: Slack, Telegram y correo (solo alertas), latido a un monitor tipo dead man's switch (Healthchecks/Cronitor) y Sentry opcional para errores no controlados. Cada canal se activa con su variable de entorno.
 
 El documento de la solución (discovery, arquitectura, seguridad, IA, delivery y plan por fases) está en
 [`docs/caso-spin-fde.pdf`](docs/caso-spin-fde.pdf).
@@ -54,11 +55,12 @@ conciliador/
   privacidad.py   tokenización de identificadores y detección de PII antes de llamar al modelo
   triaje.py       arma el paquete por excepción, aplica gates del LLM, registra la sugerencia
   orquestador.py  pipeline diario, modos, ejecución ordenada, aprobación, comparación en sombra
+  observabilidad.py  Sentry opcional, latido al monitor de cron, notificadores Telegram/correo/compuesto
   reporte.py / cli.py
 mocks/          portal del banco (con su API "futura") y Core NetPay (API + UI de bloqueo), FastAPI
 contexto/       contexto de negocio fijo que recibe el asistente (versionado, revisado con Operaciones)
 prompts/        prompts versionados
-tests/          31 pruebas: reglas, gates, privacidad, orquestador con fakes, integración HTTP real y RPA real
+tests/          35 pruebas: reglas, gates, privacidad, orquestador con fakes, integración HTTP real y RPA real
 ```
 
 ## Configuración

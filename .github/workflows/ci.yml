@@ -3,7 +3,7 @@ on: [push, pull_request]
 jobs:
   pruebas:
     runs-on: ubuntu-latest
-    container: mcr.microsoft.com/playwright/python:v1.64.0-noble
+    container: mcr.microsoft.com/playwright/python:v1.63.0-noble
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5

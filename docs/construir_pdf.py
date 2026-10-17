@@ -1,6 +1,7 @@
 """Convierte docs/caso-spin-fde.md en HTML estilizado y PDF (Chrome headless).
 Uso: uv run --with markdown python docs/construir_pdf.py
 """
+
 import re
 import shutil
 import subprocess
@@ -11,8 +12,7 @@ import markdown
 
 RAIZ = Path(__file__).resolve().parent
 md = (RAIZ / "caso-spin-fde.md").read_text(encoding="utf-8")
-cuerpo = markdown.markdown(md, extensions=["tables", "fenced_code", "toc", "attr_list", "md_in_html"],
-                           extension_configs={"toc": {"toc_depth": "2-3"}})
+cuerpo = markdown.markdown(md, extensions=["tables", "fenced_code", "toc", "attr_list", "md_in_html"], extension_configs={"toc": {"toc_depth": "2-3"}})
 cuerpo = re.sub(r"<p>\[\[SALTO\]\]</p>", '<div class="salto"></div>', cuerpo)
 cuerpo = re.sub(r"<li>\s*<a href=\"#contenido\">Contenido</a>\s*</li>", "", cuerpo)
 
@@ -37,12 +37,14 @@ pre code { background: none; padding: 0; }
 blockquote { border-left: 3px solid #a5b4fc; margin: 8pt 0; padding: 4pt 10pt; background: #f8fafc; color: #1f2937; }
 img { max-width: 100%; }
 .salto { page-break-after: always; }
-.portada { text-align: left; padding-top: 70mm; }
+.portada { text-align: left; padding-top: 14mm; }
 .portada .sup { color: #6b7280; font-size: 11pt; letter-spacing: 1px; text-transform: uppercase; }
 .portada h1 { font-size: 28pt; margin: 10pt 0 6pt; }
-.portada .sub { font-size: 15pt; color: #312e81; margin-bottom: 30pt; }
+.portada .sub { font-size: 15pt; color: #312e81; margin-bottom: 14pt; }
 .portada .meta { color: #374151; font-size: 11pt; line-height: 1.7; }
 .caja { border: 1px solid #c7d2fe; background: #eef2ff; border-radius: 5pt; padding: 8pt 12pt; margin: 8pt 0 12pt; }
+.resumen { margin-top: 26pt; font-size: 10.8pt; }
+.resumen p { margin-bottom: 9pt; }
 .nota { font-size: 9.3pt; color: #4b5563; }
 .toc { font-size: 9.8pt; column-count: 2; column-gap: 28pt; }
 .toc ul { list-style: none; padding-left: 0; }
@@ -61,6 +63,9 @@ if not chrome:
     print("sin Chrome: solo HTML", file=sys.stderr)
     sys.exit(0)
 pdf = RAIZ / "caso-spin-fde.pdf"
-subprocess.run([chrome, "--headless=new", "--disable-gpu", "--no-sandbox", "--no-pdf-header-footer",
-                f"--print-to-pdf={pdf}", f"file://{salida_html}"], check=True, capture_output=True)
+subprocess.run(
+    [chrome, "--headless=new", "--disable-gpu", "--no-sandbox", "--no-pdf-header-footer", f"--print-to-pdf={pdf}", f"file://{salida_html}"],
+    check=True,
+    capture_output=True,
+)
 print(f"PDF: {pdf} ({pdf.stat().st_size // 1024} KB)")

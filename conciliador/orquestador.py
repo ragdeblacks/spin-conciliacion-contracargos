@@ -23,6 +23,7 @@ from .dominio.modelos import Accion, Decision, EstadoEjecucion, GateCriticoFalli
 from .dominio.normalizacion import ErrorEsquema, parsear_csv
 from .dominio.reglas import conciliar, resumen
 from .libro_mayor import LibroMayor
+from .observabilidad import latido
 from .puertos import (
     AsistenteTriaje,
     BloqueadorSaldo,
@@ -75,9 +76,7 @@ class Orquestador:
         corrida_id = self.libro.abrir_corrida(fecha_operacion, self.cfg.modo, self.ad.fuente_banco.nombre)
         acumulado: list[ResultadoGate] = []
         decisiones: list[Decision] = []
-        log.info(
-            "corrida %s: fecha %s, modo %s, fuente %s", corrida_id, fecha_operacion, self.cfg.modo, self.ad.fuente_banco.nombre
-        )
+        log.info("corrida %s: fecha %s, modo %s, fuente %s", corrida_id, fecha_operacion, self.cfg.modo, self.ad.fuente_banco.nombre)
         try:
             # 1. arranque
             self._gate(corrida_id, gates.fecha_operacion_valida(fecha_operacion, hoy), acumulado)
@@ -95,9 +94,7 @@ class Orquestador:
                 raise
             self._gate(
                 corrida_id,
-                gates.g_volumen(
-                    len(movimientos), self.libro.promedio_movimientos(), self.cfg.volumen_minimo, self.cfg.volumen_factor_maximo
-                ),
+                gates.g_volumen(len(movimientos), self.libro.promedio_movimientos(), self.cfg.volumen_minimo, self.cfg.volumen_factor_maximo),
                 acumulado,
             )
 
@@ -125,15 +122,14 @@ class Orquestador:
         except GateCriticoFallido as e:
             estado = "DETENIDA"
             res = resumen(decisiones) if decisiones else {}
-            self.ad.notificador.enviar(
-                f"Conciliación {fecha_operacion} DETENIDA", f"{e.resultado.gate}: {e.resultado.detalle}", "critico"
-            )
+            self.ad.notificador.enviar(f"Conciliación {fecha_operacion} DETENIDA", f"{e.resultado.gate}: {e.resultado.detalle}", "critico")
         except Exception as e:  # noqa: BLE001
             estado = "ERROR"
             res = resumen(decisiones) if decisiones else {}
             log.exception("error no controlado")
             self.ad.notificador.enviar(f"Conciliación {fecha_operacion} ERROR", f"{type(e).__name__}: {e}", "critico")
         self.libro.cerrar_corrida(corrida_id, estado, res)
+        latido(self.cfg.url_latido, estado == "CERRADA", corrida_id)
         duracion = time.monotonic() - inicio
         if estado == "CERRADA":
             self._notificar_resumen(fecha_operacion, res, decisiones, duracion)
@@ -191,10 +187,7 @@ class Orquestador:
     def aprobar_y_ejecutar(self, corrida_id: int, aprobador: str, decision_ids: list[int] | None = None) -> list[Decision]:
         filas = self.libro.decisiones_de(corrida_id)
         pendientes = [
-            f
-            for f in filas
-            if f["estado_ejecucion"] == EstadoEjecucion.PENDIENTE_APROBACION.value
-            and (decision_ids is None or f["id"] in decision_ids)
+            f for f in filas if f["estado_ejecucion"] == EstadoEjecucion.PENDIENTE_APROBACION.value and (decision_ids is None or f["id"] in decision_ids)
         ]
         decisiones = [_decision_desde_fila(f) for f in pendientes]
         for d in decisiones:

@@ -95,9 +95,7 @@ class BloqueadorCoreUI:
     timeout_ms: int = 15_000
     nombre: str = "ui_rpa"
 
-    def bloquear(
-        self, comercio_id: str, referencia: str, monto_centavos: int, motivo: str, clave_idempotencia: str
-    ) -> ResultadoAccion:
+    def bloquear(self, comercio_id: str, referencia: str, monto_centavos: int, motivo: str, clave_idempotencia: str) -> ResultadoAccion:
         from playwright.sync_api import sync_playwright
 
         self.ruta_evidencia.mkdir(parents=True, exist_ok=True)
@@ -121,9 +119,7 @@ class BloqueadorCoreUI:
                 ya_estaba = pagina.locator(s["senal_ya_bloqueado"]).count() > 0
                 pagina.screenshot(path=str(evidencia), full_page=True)
                 navegador.close()
-            return ResultadoAccion(
-                ok=True, respuesta={"via": "ui", "ya_estaba_bloqueado": ya_estaba}, evidencia=evidencia, idempotente=ya_estaba
-            )
+            return ResultadoAccion(ok=True, respuesta={"via": "ui", "ya_estaba_bloqueado": ya_estaba}, evidencia=evidencia, idempotente=ya_estaba)
         except Exception as e:  # noqa: BLE001
             return ResultadoAccion(ok=False, error=f"{type(e).__name__}: {str(e)[:200]}")
 
@@ -136,9 +132,7 @@ class BloqueadorCoreAPI:
     token: str
     nombre: str = "api"
 
-    def bloquear(
-        self, comercio_id: str, referencia: str, monto_centavos: int, motivo: str, clave_idempotencia: str
-    ) -> ResultadoAccion:
+    def bloquear(self, comercio_id: str, referencia: str, monto_centavos: int, motivo: str, clave_idempotencia: str) -> ResultadoAccion:
         try:
             r = httpx.post(
                 f"{self.url}/api/comercios/{comercio_id}/bloqueos",

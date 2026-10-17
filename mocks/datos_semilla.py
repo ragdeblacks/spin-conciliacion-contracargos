@@ -179,9 +179,7 @@ def generar_dia(fecha: date, semilla: int = 2026, n_ventas: int = 190) -> Dia:
 def csv_banco(dia: Dia) -> str:
     lineas = ["referencia,fecha,monto,moneda,tipo,comercio_id,tarjeta,descripcion"]
     for m in dia.movimientos:
-        lineas.append(
-            f"{m.referencia},{m.fecha.isoformat()},{m.monto_centavos / 100:.2f},{m.moneda},{m.tipo},{m.comercio_id},{m.tarjeta},{m.descripcion}"
-        )
+        lineas.append(f"{m.referencia},{m.fecha.isoformat()},{m.monto_centavos / 100:.2f},{m.moneda},{m.tipo},{m.comercio_id},{m.tarjeta},{m.descripcion}")
     return "\n".join(lineas) + "\n"
 
 

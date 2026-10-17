@@ -54,6 +54,15 @@ class Configuracion:
     ruta_libro_mayor: Path = Path("datos/libro_mayor.sqlite")
     ruta_evidencia: Path = Path("evidencia")
     slack_webhook: str = ""
+    telegram_token: str = ""
+    telegram_chat: str = ""
+    correo_servidor: str = ""
+    correo_puerto: int = 587
+    correo_remitente: str = ""
+    correo_destinatarios: list[str] = field(default_factory=list)
+    correo_usuario: str = ""
+    correo_clave: str = ""
+    url_latido: str = ""
     hora_limite: str = "06:00"
     volumen_minimo: int = 1
     volumen_factor_maximo: float = 3.0  # G-VOLUMEN: más de 3x el promedio histórico detiene
@@ -83,6 +92,15 @@ class Configuracion:
             ruta_libro_mayor=Path(_env("LIBRO_MAYOR_RUTA", "datos/libro_mayor.sqlite")),
             ruta_evidencia=Path(_env("EVIDENCIA_RUTA", "evidencia")),
             slack_webhook=_env("SLACK_WEBHOOK_URL"),
+            telegram_token=_env("TELEGRAM_BOT_TOKEN"),
+            telegram_chat=_env("TELEGRAM_CHAT_ID"),
+            correo_servidor=_env("CORREO_SMTP_SERVIDOR"),
+            correo_puerto=_env_int("CORREO_SMTP_PUERTO", 587),
+            correo_remitente=_env("CORREO_REMITENTE"),
+            correo_destinatarios=[d.strip() for d in _env("CORREO_DESTINATARIOS").split(",") if d.strip()],
+            correo_usuario=_env("CORREO_SMTP_USUARIO"),
+            correo_clave=_env("CORREO_SMTP_CLAVE"),
+            url_latido=_env("LATIDO_URL"),
             hora_limite=_env("HORA_LIMITE", "06:00"),
             volumen_factor_maximo=float(_env("VOLUMEN_FACTOR_MAXIMO", "3.0")),
             parametros=ParametrosConciliacion(

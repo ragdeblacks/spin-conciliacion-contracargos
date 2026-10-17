@@ -119,7 +119,5 @@ def test_rpa_portal_y_ui_del_core(servicios, cfg, libro, fecha, tmp_path: Path):
     assert (tmp_path / f"banco_{fecha.isoformat()}.csv").exists()
     # volver a bloquear la misma referencia por UI es idempotente del lado del Core
     d = bloqueos[0]
-    r2 = bloqueador.bloquear(
-        d.movimiento.comercio_id, d.movimiento.referencia, d.movimiento.monto_centavos, "repetido", "BLQ:rep"
-    )
+    r2 = bloqueador.bloquear(d.movimiento.comercio_id, d.movimiento.referencia, d.movimiento.monto_centavos, "repetido", "BLQ:rep")
     assert r2.ok and r2.idempotente

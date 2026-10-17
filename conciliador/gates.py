@@ -58,11 +58,7 @@ def g_duplicado(decisiones: list[Decision], claves_ya_ejecutadas: set[str]) -> R
 
 def g_orden(decisiones: list[Decision]) -> ResultadoGate:
     """Ninguna liquidación arranca si queda un bloqueo sin intentar."""
-    pendientes = [
-        d
-        for d in decisiones
-        if d.accion == Accion.BLOQUEAR and d.estado_ejecucion in (EstadoEjecucion.APROBADA, EstadoEjecucion.NO_APLICA)
-    ]
+    pendientes = [d for d in decisiones if d.accion == Accion.BLOQUEAR and d.estado_ejecucion in (EstadoEjecucion.APROBADA, EstadoEjecucion.NO_APLICA)]
     if pendientes:
         return ResultadoGate("G-ORDEN", False, True, f"{len(pendientes)} bloqueos sin intentar antes de liquidar")
     return ResultadoGate("G-ORDEN", True, True, "todos los bloqueos intentados antes de la primera liquidación")
@@ -106,9 +102,7 @@ def g_llm_presupuesto(llamadas_corrida: int, tope_corrida: int, tokens_dia: int,
         return ResultadoGate("G-LLM-PRESUPUESTO", False, False, f"tope de {tope_corrida} llamadas por corrida alcanzado")
     if tokens_dia >= tope_dia:
         return ResultadoGate("G-LLM-PRESUPUESTO", False, False, f"tope de {tope_dia} tokens por día alcanzado")
-    return ResultadoGate(
-        "G-LLM-PRESUPUESTO", True, False, f"{llamadas_corrida}/{tope_corrida} llamadas, {tokens_dia}/{tope_dia} tokens"
-    )
+    return ResultadoGate("G-LLM-PRESUPUESTO", True, False, f"{llamadas_corrida}/{tope_corrida} llamadas, {tokens_dia}/{tope_dia} tokens")
 
 
 def g_deriva(tasa_excepciones: float, tasa_historica: float | None, factor: float = 2.0) -> ResultadoGate:

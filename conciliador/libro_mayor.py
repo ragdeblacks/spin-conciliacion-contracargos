@@ -128,23 +128,16 @@ class LibroMayor:
         return d
 
     def corridas(self) -> list[dict]:
-        return [
-            dict(f)
-            for f in self.con.execute("SELECT id, fecha_operacion, modo, fuente, inicio, fin, estado FROM corridas ORDER BY id")
-        ]
+        return [dict(f) for f in self.con.execute("SELECT id, fecha_operacion, modo, fuente, inicio, fin, estado FROM corridas ORDER BY id")]
 
     def promedio_movimientos(self, ultimas: int = 10) -> float | None:
-        filas = self.con.execute(
-            "SELECT resumen FROM corridas WHERE estado='CERRADA' AND resumen IS NOT NULL ORDER BY id DESC LIMIT ?", (ultimas,)
-        ).fetchall()
+        filas = self.con.execute("SELECT resumen FROM corridas WHERE estado='CERRADA' AND resumen IS NOT NULL ORDER BY id DESC LIMIT ?", (ultimas,)).fetchall()
         totales = [json.loads(f["resumen"]).get("TOTAL", 0) for f in filas]
         totales = [t for t in totales if t]
         return sum(totales) / len(totales) if totales else None
 
     def tasa_excepciones_historica(self, ultimas: int = 10) -> float | None:
-        filas = self.con.execute(
-            "SELECT resumen FROM corridas WHERE estado='CERRADA' AND resumen IS NOT NULL ORDER BY id DESC LIMIT ?", (ultimas,)
-        ).fetchall()
+        filas = self.con.execute("SELECT resumen FROM corridas WHERE estado='CERRADA' AND resumen IS NOT NULL ORDER BY id DESC LIMIT ?", (ultimas,)).fetchall()
         tasas = []
         for f in filas:
             r = json.loads(f["resumen"])
@@ -189,17 +182,13 @@ class LibroMayor:
         return [dict(f) for f in self.con.execute("SELECT * FROM decisiones WHERE corrida_id=? ORDER BY id", (corrida_id,))]
 
     def aprobar(self, decision_id: int, aprobador: str) -> None:
-        self.con.execute(
-            "INSERT INTO aprobaciones (decision_id, aprobador, momento) VALUES (?,?,?)", (decision_id, aprobador, _ahora())
-        )
+        self.con.execute("INSERT INTO aprobaciones (decision_id, aprobador, momento) VALUES (?,?,?)", (decision_id, aprobador, _ahora()))
         self.con.execute("UPDATE decisiones SET estado_ejecucion=? WHERE id=?", (EstadoEjecucion.APROBADA.value, decision_id))
         self.con.commit()
 
     # --- acciones (idempotencia) ------------------------------------------
     def claves_confirmadas(self) -> set[str]:
-        return {
-            f["clave_idempotencia"] for f in self.con.execute("SELECT clave_idempotencia FROM acciones WHERE estado='CONFIRMADA'")
-        }
+        return {f["clave_idempotencia"] for f in self.con.execute("SELECT clave_idempotencia FROM acciones WHERE estado='CONFIRMADA'")}
 
     def accion(self, clave: str) -> dict | None:
         f = self.con.execute("SELECT * FROM acciones WHERE clave_idempotencia=?", (clave,)).fetchone()
@@ -271,9 +260,7 @@ class LibroMayor:
 
     def tokens_llm_hoy(self) -> int:
         hoy = date.today().isoformat()
-        f = self.con.execute(
-            "SELECT COALESCE(SUM(tokens_entrada+tokens_salida),0) AS t FROM sugerencias WHERE momento LIKE ?", (f"{hoy}%",)
-        ).fetchone()
+        f = self.con.execute("SELECT COALESCE(SUM(tokens_entrada+tokens_salida),0) AS t FROM sugerencias WHERE momento LIKE ?", (f"{hoy}%",)).fetchone()
         return int(f["t"])
 
     def cerrar(self) -> None:

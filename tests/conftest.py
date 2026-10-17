@@ -26,9 +26,7 @@ def dia():
 @pytest.fixture
 def movimientos(dia) -> list[MovimientoBanco]:
     return [
-        MovimientoBanco(
-            m.referencia, m.fecha, m.monto_centavos, m.moneda, TipoMovimiento(m.tipo), m.comercio_id, m.tarjeta, m.descripcion
-        )
+        MovimientoBanco(m.referencia, m.fecha, m.monto_centavos, m.moneda, TipoMovimiento(m.tipo), m.comercio_id, m.tarjeta, m.descripcion)
         for m in dia.movimientos
     ]
 

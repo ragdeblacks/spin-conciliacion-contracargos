@@ -19,6 +19,7 @@ from datetime import date, timedelta
 from .config import Configuracion
 from .ensamblaje import construir_adaptadores
 from .libro_mayor import LibroMayor
+from .observabilidad import iniciar_sentry
 from .orquestador import Orquestador
 from .reporte import reporte_markdown
 
@@ -59,6 +60,7 @@ def main(argv: list[str] | None = None) -> int:
 
     args = p.parse_args(argv)
     _logging(args.verboso)
+    iniciar_sentry()
     cfg = Configuracion.desde_entorno()
     if getattr(args, "modo", None):
         cfg.modo = args.modo
@@ -119,9 +121,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.comando == "corridas":
         for c in libro.corridas():
-            print(
-                f"  {c['id']:>4} {c['fecha_operacion']} {c['modo']:<9} {c['fuente']:<11} {c['estado']:<9} {c['inicio']} → {c['fin'] or '-'}"
-            )
+            print(f"  {c['id']:>4} {c['fecha_operacion']} {c['modo']:<9} {c['fuente']:<11} {c['estado']:<9} {c['inicio']} → {c['fin'] or '-'}")
         return 0
 
     if args.comando == "contrato-portal":

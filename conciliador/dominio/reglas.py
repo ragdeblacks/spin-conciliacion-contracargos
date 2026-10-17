@@ -92,9 +92,7 @@ def conciliar(
         if mov.tipo == TipoMovimiento.CONTRACARGO:
             contracargos_por_comercio[mov.comercio_id] += 1
             if t.comercio_bloqueado:
-                decisiones.append(
-                    Decision(mov, Accion.YA_PROCESADO, Motivo.COMERCIO_YA_BLOQUEADO, transaccion=t, regla="R3-ya-bloqueado")
-                )
+                decisiones.append(Decision(mov, Accion.YA_PROCESADO, Motivo.COMERCIO_YA_BLOQUEADO, transaccion=t, regla="R3-ya-bloqueado"))
                 continue
             motivo = Motivo.CONTRACARGO_CON_MATCH
             nota = ""
@@ -106,8 +104,7 @@ def conciliar(
                 nota = f"Contracargo por {mov.monto_centavos} sobre venta de {t.monto_centavos}."
             d = Decision(mov, Accion.BLOQUEAR, motivo, transaccion=t, regla="R4-contracargo", nota=nota)
             d.requiere_aprobacion = (
-                mov.monto_centavos > params.umbral_aprobacion_centavos
-                or contracargos_por_comercio[mov.comercio_id] > params.max_contracargos_comercio_dia
+                mov.monto_centavos > params.umbral_aprobacion_centavos or contracargos_por_comercio[mov.comercio_id] > params.max_contracargos_comercio_dia
             )
             decisiones.append(d)
             continue
@@ -138,9 +135,7 @@ def conciliar(
             )
             continue
         if t.estado == EstadoTransaccion.LIQUIDADA:
-            decisiones.append(
-                Decision(mov, Accion.YA_PROCESADO, Motivo.LIQUIDADA_EN_CORE, transaccion=t, regla="R7-ya-liquidada")
-            )
+            decisiones.append(Decision(mov, Accion.YA_PROCESADO, Motivo.LIQUIDADA_EN_CORE, transaccion=t, regla="R7-ya-liquidada"))
             continue
         if t.estado == EstadoTransaccion.BLOQUEADA or t.comercio_bloqueado:
             decisiones.append(

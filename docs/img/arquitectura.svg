@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 520" font-family="Helvetica, Arial, sans-serif" font-size="13">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 535" font-family="Helvetica, Arial, sans-serif" font-size="13">
   <defs>
     <marker id="f" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#374151"/></marker>
     <style>
@@ -71,11 +71,12 @@
   <text x="860" y="330" text-anchor="middle" class="s">botón de paro</text>
 
   <!-- IA -->
-  <rect x="240" y="400" width="500" height="95" class="ia"/>
+  <rect x="240" y="400" width="500" height="112" class="ia"/>
   <text x="490" y="424" text-anchor="middle" class="h">Asistente de triaje (fuera del camino crítico)</text>
-  <text x="256" y="448" class="t">tokenización PII → G-LLM-PII · G-LLM-PRESUPUESTO → puerto → validación de esquema</text>
-  <text x="256" y="468" class="t">adaptadores: nulo (determinista, siempre) · Anthropic · OpenAI-compatible (modelo interno)</text>
-  <text x="256" y="486" class="s">nunca ejecuta, nunca ve identificadores reales, siempre con fallback</text>
+  <text x="256" y="446" class="t">1. Tokenizar datos sensibles → G-LLM-PII · G-LLM-PRESUPUESTO</text>
+  <text x="256" y="464" class="t">2. Puerto AsistenteTriaje → adaptador: nulo · Anthropic · OpenAI-compatible</text>
+  <text x="256" y="482" class="t">3. Validar esquema y catálogo → sugerencia al analista (o fallback)</text>
+  <text x="256" y="500" class="s">nunca ejecuta, nunca ve identificadores reales, siempre con fallback</text>
 
   <!-- flechas -->
   <path d="M220,80 L250,40" class="fl"/>
@@ -88,6 +89,6 @@
   <path d="M240,285 L220,285" class="fl"/>
   <path d="M740,285 L760,285" class="fl"/>
   <path d="M490,360 L490,400" class="fl"/>
-  <path d="M740,450 L860,450 L860,340" class="fl"/>
+  <path d="M740,456 L860,456 L860,340" class="fl"/>
   <text x="866" y="400" class="s">sugerencias</text>
 </svg>

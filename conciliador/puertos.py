@@ -44,9 +44,7 @@ class LiberadorLiquidacion(Protocol):
 class BloqueadorSaldo(Protocol):
     nombre: str
 
-    def bloquear(
-        self, comercio_id: str, referencia: str, monto_centavos: int, motivo: str, clave_idempotencia: str
-    ) -> ResultadoAccion: ...
+    def bloquear(self, comercio_id: str, referencia: str, monto_centavos: int, motivo: str, clave_idempotencia: str) -> ResultadoAccion: ...
 
 
 @dataclass

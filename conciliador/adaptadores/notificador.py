@@ -24,6 +24,4 @@ class NotificadorSlack:
 @dataclass
 class NotificadorLog:
     def enviar(self, titulo: str, cuerpo: str, severidad: str = "info") -> None:
-        log.info(
-            json.dumps({"evento": "notificacion", "severidad": severidad, "titulo": titulo, "cuerpo": cuerpo}, ensure_ascii=False)
-        )
+        log.info(json.dumps({"evento": "notificacion", "severidad": severidad, "titulo": titulo, "cuerpo": cuerpo}, ensure_ascii=False))

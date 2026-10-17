@@ -1,5 +1,5 @@
 # Imagen del conciliador. Base oficial de Playwright: trae Chromium y sus dependencias del sistema.
-FROM mcr.microsoft.com/playwright/python:v1.64.0-noble AS base
+FROM mcr.microsoft.com/playwright/python:v1.63.0-noble AS base
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 UV_SYSTEM_PYTHON=1
 COPY --from=ghcr.io/astral-sh/uv:0.9 /uv /usr/local/bin/uv
 WORKDIR /app

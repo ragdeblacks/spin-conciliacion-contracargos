@@ -10,6 +10,7 @@ from .adaptadores.core import BloqueadorCoreAPI, BloqueadorCoreUI, CoreAPI
 from .adaptadores.llm import AsistenteAnthropic, AsistenteNulo, AsistenteOpenAICompatible
 from .adaptadores.notificador import NotificadorLog, NotificadorSlack
 from .config import Configuracion
+from .observabilidad import NotificadorCompuesto, NotificadorCorreo, NotificadorTelegram
 from .orquestador import Adaptadores
 
 
@@ -34,5 +35,14 @@ def construir_adaptadores(cfg: Configuracion) -> Adaptadores:
     else:
         asistente = AsistenteNulo()
 
-    notificador = NotificadorSlack(cfg.slack_webhook) if cfg.slack_webhook else NotificadorLog()
+    canales = []
+    if cfg.slack_webhook:
+        canales.append(NotificadorSlack(cfg.slack_webhook))
+    if cfg.telegram_token and cfg.telegram_chat:
+        canales.append(NotificadorTelegram(cfg.telegram_token, cfg.telegram_chat))
+    if cfg.correo_servidor and cfg.correo_destinatarios:
+        canales.append(
+            NotificadorCorreo(cfg.correo_servidor, cfg.correo_puerto, cfg.correo_remitente, cfg.correo_destinatarios, cfg.correo_usuario, cfg.correo_clave)
+        )
+    notificador = NotificadorCompuesto(canales) if canales else NotificadorLog()
     return Adaptadores(fuente, core, core, bloqueador, asistente, notificador)
