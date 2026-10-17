@@ -18,9 +18,9 @@ def test_casos_de_la_semilla(movimientos, transacciones, dia):
 
     for ref in c["NORMAL"]:
         assert por[ref][0].accion == Accion.LIQUIDAR and por[ref][0].motivo == Motivo.MATCH_EXACTO
-    for ref in c["VENTA_DE_COMERCIO_CON_CONTRACARGO"]:
-        assert por[ref][0].motivo == Motivo.CONTRACARGO_MISMO_DIA and por[ref][0].accion == Accion.EXCEPCION
-    assert c["VENTA_DE_COMERCIO_CON_CONTRACARGO"], "la semilla debe incluir ventas de comercios con contracargo"
+    for ref in c["VENTA_DE_COMERCIO_EN_RIESGO"]:
+        assert por[ref][0].motivo == Motivo.COMERCIO_EN_RIESGO and por[ref][0].accion == Accion.EXCEPCION
+    assert c["VENTA_DE_COMERCIO_EN_RIESGO"], "la semilla debe incluir ventas del comercio que supera el umbral"
     (alto,) = c["MONTO_ALTO"]
     assert por[alto][0].accion == Accion.LIQUIDAR and por[alto][0].requiere_aprobacion
     for ref in c["MONTO_DIFERENTE"]:
@@ -50,8 +50,8 @@ def test_casos_de_la_semilla(movimientos, transacciones, dia):
     (sobre_liq,) = c["CONTRACARGO_SOBRE_LIQUIDADA"]
     assert por[sobre_liq][0].motivo == Motivo.CONTRACARGO_SOBRE_LIQUIDADA
     acumulados = [por[r][0] for r in c["CONTRACARGO_ACUMULADO"]]
-    assert all(d.accion == Accion.BLOQUEAR for d in acumulados)
-    assert sum(d.requiere_aprobacion for d in acumulados) == 1, "el cuarto contracargo del mismo comercio pide aprobación"
+    assert all(d.accion == Accion.BLOQUEAR and not d.requiere_aprobacion for d in acumulados), "retener nunca espera aprobación"
+    assert all("umbral de riesgo" in d.nota for d in acumulados)
     (cc_sin,) = c["CONTRACARGO_SIN_MATCH"]
     assert por[cc_sin][0].motivo == Motivo.CONTRACARGO_SIN_MATCH
     for ref in c["SOLO_EN_CORE"]:
@@ -79,3 +79,19 @@ def test_decision_es_explicable(movimientos, transacciones):
     for d in conciliar(movimientos, transacciones):
         assert d.regla, "toda decisión lleva la regla que la produjo"
         assert d.motivo
+
+
+def test_ratio_historico_pone_al_comercio_en_riesgo(movimientos, transacciones, dia):
+    from conciliador.dominio.reglas import comercios_en_riesgo
+
+    por_ref = {t.referencia: t for t in transacciones}
+    params = ParametrosConciliacion()
+    # un comercio con 12 contracargos sobre 500 ventas en la ventana (2.4 %) supera el 1.5 %
+    comercio = dia.casos["NORMAL"][0]
+    comercio = next(m.comercio_id for m in movimientos if m.referencia == comercio)
+    assert comercio in comercios_en_riesgo(movimientos, por_ref, params, {comercio: (12, 500)})
+    # con pocos contracargos el ratio no aplica aunque sea alto (poco volumen)
+    assert comercio not in comercios_en_riesgo(movimientos, por_ref, params, {comercio: (3, 50)})
+    dec = conciliar(movimientos, transacciones, params, {comercio: (12, 500)})
+    ventas = [d for d in dec if d.movimiento.comercio_id == comercio and d.movimiento.tipo.value == "VENTA"]
+    assert ventas and all(d.motivo == Motivo.COMERCIO_EN_RIESGO for d in ventas)

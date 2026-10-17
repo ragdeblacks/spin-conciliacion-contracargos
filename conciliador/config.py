@@ -66,6 +66,7 @@ class Configuracion:
     hora_limite: str = "06:00"
     volumen_minimo: int = 1
     volumen_factor_maximo: float = 3.0  # G-VOLUMEN: más de 3x el promedio histórico detiene
+    ventana_riesgo_dias: int = 30  # ventana del ratio de contracargos por comercio
     parametros: ParametrosConciliacion = field(default_factory=ParametrosConciliacion)
 
     @classmethod
@@ -108,6 +109,8 @@ class Configuracion:
                 tolerancia_dias=_env_int("TOLERANCIA_DIAS", 1),
                 umbral_aprobacion_centavos=_env_int("UMBRAL_APROBACION_CENTAVOS", 50_000_00),
                 max_contracargos_comercio_dia=_env_int("MAX_CONTRACARGOS_COMERCIO_DIA", 3),
+                ratio_contracargos_comercio=float(_env("RATIO_CONTRACARGOS_COMERCIO", "0.015")),
+                min_contracargos_para_ratio=_env_int("MIN_CONTRACARGOS_PARA_RATIO", 10),
             ),
         )
         c.validar()

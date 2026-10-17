@@ -28,7 +28,7 @@ Lo sostienen tres argumentos, que desarrollo en las páginas siguientes: **prote
 
 La automatización vale la pena solo si no puede perder dinero por su cuenta. Esa condición define cinco decisiones de diseño.
 
-**Los contracargos se bloquean primero y las liquidaciones se liberan después.** Una liquidación tarde produce un comercio molesto; un contracargo sin bloquear produce una pérdida. El pipeline ejecuta todos los bloqueos del día y un gate verifica que no quede ninguno sin intentar antes de que arranque la primera liquidación. Las ventas de un comercio que ese día trae contracargo se retienen para que una persona decida si se liberan; esta regla es configurable y salió de una prueba en la que el Core simulado rechazó liberar dinero a un comercio recién bloqueado.
+**Un contracargo retiene el importe en disputa, no al comercio.** Así operan los adquirentes: el importe del contracargo, más su comisión, se retiene en el saldo del comercio y se netea contra su siguiente liquidación o se cobra de una reserva; el resto de sus ventas se liquida con normalidad, y si el comercio representa la disputa y gana, la retención se libera (la comisión no). Por eso "bloquear saldo" en este diseño significa retener ese importe, y la retención se ejecuta sin doble control porque es protectora y reversible. Dentro de la corrida van primero las retenciones y después las liquidaciones, con un gate que impide liberar mientras quede una retención sin intentar: así el neteo ocurre antes de que salga el dinero. Suspender a un comercio es otra cosa: una decisión de Riesgos, nunca un efecto automático. El sistema solo la propone cuando el comercio supera umbrales del estilo de los programas de monitoreo de las redes (Visa VAMP baja a 1.5 % de disputas sobre transacciones en abril de 2026; Mastercard ECM arranca en 1.5 % con cien o más contracargos al mes): más de tres contracargos en un día o un ratio de 1.5 % en treinta días con volumen suficiente. En ese caso sus ventas pasan a revisión y una persona decide si libera, retiene o suspende. Los umbrales son configuración y se acuerdan con Riesgos.
 
 **Ninguna acción se ejecuta dos veces.** Cada liquidación y cada bloqueo llevan una clave única derivada del movimiento. La clave viaja al Core en la cabecera de idempotencia y se guarda en un libro mayor propio, de solo inserción. Repetir una corrida, reanudarla después de un corte o correrla contra un Core que devuelve estados atrasados no libera ni bloquea nada de nuevo. Hay una prueba automatizada para cada uno de esos tres escenarios.
 
@@ -113,7 +113,7 @@ Un pipeline que corre en mi laptop no resuelve nada a las cinco de la mañana. E
 | Arranque: credenciales desde el gestor, Core vivo | G-SECRETOS, G-CORE-VIVO | No se toca nada; alerta |
 | Ingesta del CSV por el adaptador activo | G-ESQUEMA, G-VOLUMEN | Se detiene; carga manual |
 | Conciliación con reglas explicables | G-DUPLICADO | |
-| Bloqueos por contracargo | G-UMBRAL | Acción fallida con rastro |
+| Retención del importe de cada contracargo | Sin doble control (protectora, reversible) | Acción fallida con rastro |
 | Verificación de orden | G-ORDEN | No arrancan liquidaciones |
 | Liquidaciones por API con idempotencia | G-UMBRAL | Acción fallida con rastro |
 | Triaje de excepciones con el asistente | G-LLM-PII, G-LLM-PRESUPUESTO | El analista trabaja sin sugerencia |
@@ -129,7 +129,7 @@ El modelo de referencia es Claude Sonnet 5.5; con cien excepciones diarias cuest
 
 ### El prototipo
 
-El repositorio contiene el portal del banco y el Core de NetPay simulados (incluida la API futura del banco, la API de bloqueo detrás de una bandera y un modo que imita el cambio de portal), el conciliador completo con los adaptadores descritos, datos de prueba con los casos incómodos (duplicados, montos distintos, contracargos sobre ventas ya liquidadas, acumulación en un mismo comercio, monto alto, cambio de esquema), 39 pruebas automatizadas, Docker Compose y el pipeline de integración continua.
+El repositorio contiene el portal del banco y el Core de NetPay simulados (incluida la API futura del banco, la API de bloqueo detrás de una bandera y un modo que imita el cambio de portal), el conciliador completo con los adaptadores descritos, datos de prueba con los casos incómodos (duplicados, montos distintos, contracargos sobre ventas ya liquidadas, acumulación en un mismo comercio, monto alto, cambio de esquema), 40 pruebas automatizadas, Docker Compose y el pipeline de integración continua.
 
 | Corrida real contra los servicios simulados | Resultado |
 |---|---|

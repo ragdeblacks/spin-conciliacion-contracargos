@@ -28,7 +28,7 @@ PROB_FALLA = float(os.environ.get("CORE_FALLAS_PROBABILIDAD", "0"))
 
 app = FastAPI(title="Core NetPay (mock)")
 DIAS: dict[str, Dia] = {}
-COMERCIOS: dict[str, dict] = {}  # comercio_id → {bloqueado, saldo_bloqueado, bloqueos: [...]}
+COMERCIOS: dict[str, dict] = {}  # comercio_id → {suspendido, saldo_retenido_centavos, retenciones: [...]}
 CLAVES_IDEMPOTENCIA: dict[str, dict] = {}
 FALLAS_YA_DADAS: set[str] = set()
 SESIONES: set[str] = set()
@@ -41,12 +41,12 @@ def _dia(fecha: date) -> Dia:
         d = generar_dia(fecha)
         DIAS[k] = d
         for c in d.comercios_bloqueados:
-            _comercio(c)["bloqueado"] = True
+            _comercio(c)["suspendido"] = True
     return DIAS[k]
 
 
 def _comercio(cid: str) -> dict:
-    return COMERCIOS.setdefault(cid, {"comercio_id": cid, "bloqueado": False, "saldo_bloqueado_centavos": 0, "bloqueos": []})
+    return COMERCIOS.setdefault(cid, {"comercio_id": cid, "suspendido": False, "saldo_retenido_centavos": 0, "retenciones": []})
 
 
 def _auth(authorization: str) -> None:
@@ -67,7 +67,7 @@ def transacciones(fecha: date = Query(...), authorization: str = Header("")):
     for t in d.transacciones:
         fila = asdict(t)
         fila["fecha"] = t.fecha.isoformat()
-        fila["comercio_bloqueado"] = _comercio(t.comercio_id)["bloqueado"]
+        fila["comercio_bloqueado"] = _comercio(t.comercio_id)["suspendido"]  # suspendido por Riesgos; una retención no suspende
         out.append(fila)
     return {"fecha": fecha.isoformat(), "transacciones": out}
 
@@ -97,8 +97,10 @@ def liberar(cuerpo: Liberar, authorization: str = Header(""), idempotency_key: s
     t = _buscar_tx(cuerpo.transaccion_id)
     if t.estado == "LIQUIDADA":
         raise HTTPException(409, "ya liquidada")
-    if t.estado == "BLOQUEADA" or _comercio(t.comercio_id)["bloqueado"]:
-        raise HTTPException(422, "comercio con saldo bloqueado")
+    if t.estado == "BLOQUEADA":
+        raise HTTPException(422, "la venta está en disputa (importe retenido)")
+    if _comercio(t.comercio_id)["suspendido"]:
+        raise HTTPException(422, "comercio suspendido por Riesgos")
     t.estado = "LIQUIDADA"
     resp = {"transaccion_id": t.id, "estado": t.estado, "monto_centavos": t.monto_centavos}
     CLAVES_IDEMPOTENCIA[idempotency_key] = resp
@@ -119,11 +121,12 @@ class Bloqueo(BaseModel):
 
 def _bloquear(comercio_id: str, referencia: str, monto_centavos: int, motivo: str, via: str) -> tuple[dict, bool]:
     c = _comercio(comercio_id)
-    ya = any(b["referencia"] == referencia for b in c["bloqueos"])
+    # Retiene el importe en disputa (se netea contra la siguiente liquidación). El comercio sigue activo:
+    # suspenderlo es una decisión de Riesgos, no un efecto automático del contracargo.
+    ya = any(b["referencia"] == referencia for b in c["retenciones"])
     if not ya:
-        c["bloqueado"] = True
-        c["saldo_bloqueado_centavos"] += monto_centavos
-        c["bloqueos"].append({"referencia": referencia, "monto_centavos": monto_centavos, "motivo": motivo, "via": via})
+        c["saldo_retenido_centavos"] += monto_centavos
+        c["retenciones"].append({"referencia": referencia, "monto_centavos": monto_centavos, "motivo": motivo, "via": via})
         for d in DIAS.values():
             for t in d.transacciones:
                 if t.referencia == referencia:
@@ -172,7 +175,7 @@ def _ui_sesion(s: str | None) -> None:
 def ui_comercios(sesion_core: str | None = Cookie(None)):
     _ui_sesion(sesion_core)
     filas = "".join(
-        f"<li><a href='/ui/comercios/{c['comercio_id']}'>{c['comercio_id']}</a> {'🔒' if c['bloqueado'] else ''}</li>"
+        f"<li><a href='/ui/comercios/{c['comercio_id']}'>{c['comercio_id']}</a> {'⛔' if c['suspendido'] else ''}</li>"
         for c in sorted(COMERCIOS.values(), key=lambda c: c["comercio_id"])
     )
     return f"<html><body style='font-family:Arial'><h2>Comercios</h2><ul>{filas}</ul></body></html>"
@@ -184,7 +187,7 @@ def ui_comercio(comercio_id: str, sesion_core: str | None = Cookie(None)):
     c = _comercio(comercio_id)
     return f"""<html><head><title>Comercio {comercio_id}</title></head><body style="font-family:Arial">
 <h2>Comercio {comercio_id}</h2>
-<p>Estado: {"BLOQUEADO" if c["bloqueado"] else "ACTIVO"} · saldo bloqueado ${c["saldo_bloqueado_centavos"] / 100:,.2f}</p>
+<p>Estado: {"SUSPENDIDO" if c["suspendido"] else "ACTIVO"} · saldo retenido por disputas ${c["saldo_retenido_centavos"] / 100:,.2f}</p>
 <h3>Bloquear saldo por contracargo</h3>
 <form method="post" action="/ui/comercios/{comercio_id}/bloquear">
  <label>Referencia <input name="referencia"></label><br>
@@ -208,7 +211,7 @@ def ui_bloquear(
     mensaje = "El saldo de este comercio ya estaba bloqueado por esa referencia." if ya else "Saldo bloqueado correctamente."
     return f"""<html><body style="font-family:Arial"><h2>Comercio {comercio_id}</h2>
 <p class="resultado">{mensaje}</p>
-<p>Saldo bloqueado: ${c["saldo_bloqueado_centavos"] / 100:,.2f} · referencia {referencia.upper()} · motivo: {motivo}</p>
+<p>Saldo retenido por disputas: ${c["saldo_retenido_centavos"] / 100:,.2f} · referencia {referencia.upper()} · motivo: {motivo}</p>
 <a href="/ui/comercios/{comercio_id}">Volver</a></body></html>"""
 
 

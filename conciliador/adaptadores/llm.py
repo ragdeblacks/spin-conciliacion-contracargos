@@ -76,7 +76,7 @@ SUGERENCIAS_POR_MOTIVO = {
     "FECHA_FUERA_DE_RANGO": ("Desfase de fecha mayor a la tolerancia", "LIQUIDAR_MANUAL", 0.5),
     "DUPLICADO_EN_ARCHIVO": ("Misma referencia repetida en el archivo del banco", "IGNORAR_DUPLICADO", 0.9),
     "COMERCIO_BLOQUEADO": ("Venta de un comercio con saldo bloqueado", "BLOQUEAR_MANUAL", 0.6),
-    "CONTRACARGO_MISMO_DIA": ("Venta de un comercio que hoy recibió contracargo", "REVISAR_CON_COMERCIO", 0.6),
+    "COMERCIO_EN_RIESGO": ("Comercio por encima del umbral de contracargos", "REVISAR_CON_COMERCIO", 0.6),
     "MONEDA_DISTINTA": ("Moneda del banco distinta a la del Core", "ESCALAR_AL_BANCO", 0.7),
 }
 

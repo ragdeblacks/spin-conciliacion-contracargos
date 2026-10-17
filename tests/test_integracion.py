@@ -86,7 +86,7 @@ def test_adaptadores_api_contra_mocks(servicios, cfg, libro, fecha):
     r2 = Orquestador(cfg, libro, ad).correr(fecha, hoy=fecha + timedelta(days=1))
     assert r2.estado == "CERRADA" and r2.resumen["YA_PROCESADO"] >= len(ejecutadas)
     c = httpx.get(f"{servicios['core']}/api/comercios/COM-0007", headers={"Authorization": "Bearer token-core-demo"}).json()
-    assert c["bloqueado"] and len(c["bloqueos"]) == 3  # el cuarto contracargo quedó pendiente de aprobación
+    assert not c["suspendido"] and len(c["retenciones"]) == 4  # se retienen los 4 importes; suspender es decisión de Riesgos
 
 
 def test_liberar_es_idempotente_en_el_core(servicios):
@@ -113,9 +113,9 @@ def test_rpa_portal_y_ui_del_core(servicios, cfg, libro, fecha, tmp_path: Path):
     r = Orquestador(cfg, libro, ad).correr(fecha, hoy=fecha + timedelta(days=1))
     assert r.estado == "CERRADA", [g for g in r.gates if not g.ok]
     bloqueos = [d for d in r.decisiones if d.accion == Accion.BLOQUEAR and d.estado_ejecucion == EstadoEjecucion.EJECUTADA]
-    assert len(bloqueos) == 10
+    assert len(bloqueos) == 11
     capturas = list(tmp_path.glob("bloqueo_*.png"))
-    assert len(capturas) == 10, "cada bloqueo por UI deja captura como evidencia"
+    assert len(capturas) == 11, "cada retención por UI deja captura como evidencia"
     assert (tmp_path / f"banco_{fecha.isoformat()}.csv").exists()
     # volver a bloquear la misma referencia por UI es idempotente del lado del Core
     d = bloqueos[0]

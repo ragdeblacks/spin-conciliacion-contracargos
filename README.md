@@ -6,7 +6,7 @@ conciliación matutina entre los movimientos del banco adquirente y el Core de N
 
 - **Ingesta** del CSV del portal legacy del banco por RPA (Playwright), por API cuando el banco la libere, o por archivo manual como respaldo.
 - **Conciliación determinista** con reglas explicables (cada decisión lleva la regla que la produjo).
-- **Ejecución idempotente**: bloqueos de saldo por contracargo primero (hoy por la UI del Core, mañana por API), liquidaciones después (API REST con clave de idempotencia).
+- **Ejecución idempotente**: por cada contracargo se retiene el importe en disputa en el saldo del comercio (hoy por la UI del Core, mañana por API) y después se liberan las liquidaciones (API REST con clave de idempotencia). El comercio sigue operando; suspenderlo es una decisión de Riesgos que el sistema solo propone cuando supera umbrales configurables (contracargos por día o ratio en 30 días, al estilo de Visa VAMP y Mastercard ECM).
 - **Doble control** para montos altos y acumulación anómala; **tres modos** de adopción: sombra, asistida, autónoma.
 - **Triaje de excepciones asistido por IA**, fuera del camino crítico, con tokenización de datos sensibles, presupuesto y fallback determinista. Agnóstico al proveedor (Anthropic, OpenAI-compatible o ninguno).
 - **Libro mayor** append-only, **gates** críticos y no críticos, evidencia en capturas, reporte matutino.
@@ -66,7 +66,7 @@ scripts/poblar_demo.py  30 días de operación simulada (sombra → asistida →
 mocks/          portal del banco (con su API "futura") y Core NetPay (API + UI de bloqueo), FastAPI
 contexto/       contexto de negocio fijo que recibe el asistente (versionado, revisado con Operaciones)
 prompts/        prompts versionados
-tests/          39 pruebas: reglas, gates, privacidad, orquestador con fakes, integración HTTP real y RPA real
+tests/          40 pruebas: reglas, gates, privacidad, orquestador con fakes, integración HTTP real y RPA real
 ```
 
 ## Configuración

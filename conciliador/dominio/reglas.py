@@ -25,9 +25,12 @@ class ParametrosConciliacion:
     tolerancia_monto_centavos: int = 0  # diferencia aceptada entre banco y core
     tolerancia_dias: int = 1  # desfase de fecha aceptado (corte nocturno)
     ventana_candidatos_dias: int = 3  # para buscar parecidos cuando no hay match
-    umbral_aprobacion_centavos: int = 50_000_00  # $50,000.00: arriba de esto, doble control
-    max_contracargos_comercio_dia: int = 3  # acumulación anómala → aprobación
-    retener_ventas_con_contracargo: bool = True  # un comercio con contracargo hoy no recibe liquidación sin revisión
+    umbral_aprobacion_centavos: int = 50_000_00  # $50,000.00: liberar más que esto exige doble control
+    # Riesgo por comercio, inspirado en los programas de monitoreo de las redes (Visa VAMP 1.5 %; Mastercard ECM 1.5 % y 100+):
+    # si el comercio supera cualquiera de estos umbrales, sus ventas pasan a revisión y Riesgos decide si suspende.
+    max_contracargos_comercio_dia: int = 3
+    ratio_contracargos_comercio: float = 0.015  # contracargos / ventas del comercio en la ventana histórica
+    min_contracargos_para_ratio: int = 10  # el ratio solo cuenta con volumen suficiente
 
 
 def _candidatos_cercanos(
@@ -48,10 +51,28 @@ def _candidatos_cercanos(
     return out[:5]
 
 
+def comercios_en_riesgo(
+    movimientos: list[MovimientoBanco],
+    por_referencia: dict[str, TransaccionCore],
+    params: ParametrosConciliacion,
+    historial: dict[str, tuple[int, int]] | None = None,
+) -> set[str]:
+    """Comercios que superan los umbrales de riesgo: contracargos del día, o ratio histórico
+    contracargos / ventas con volumen suficiente. `historial` = {comercio: (contracargos, ventas)} en la ventana."""
+    hoy: Counter[str] = Counter(m.comercio_id for m in movimientos if m.tipo == TipoMovimiento.CONTRACARGO and m.referencia in por_referencia)
+    riesgo = {c for c, n in hoy.items() if n > params.max_contracargos_comercio_dia}
+    for c, (cc, ventas) in (historial or {}).items():
+        cc_total = cc + hoy.get(c, 0)
+        if cc_total >= params.min_contracargos_para_ratio and ventas and cc_total / ventas >= params.ratio_contracargos_comercio:
+            riesgo.add(c)
+    return riesgo
+
+
 def conciliar(
     movimientos: list[MovimientoBanco],
     transacciones: list[TransaccionCore],
     params: ParametrosConciliacion | None = None,
+    historial_comercios: dict[str, tuple[int, int]] | None = None,
 ) -> list[Decision]:
     params = params or ParametrosConciliacion()
     por_referencia = {t.referencia: t for t in transacciones}
@@ -60,15 +81,8 @@ def conciliar(
         por_comercio[t.comercio_id].append(t)
 
     repetidos = Counter((m.referencia, m.tipo) for m in movimientos)
-    # pre-pase: comercios que hoy traen contracargo con match en el Core. Sus ventas se retienen
-    # porque el bloqueo de saldo se ejecuta primero y el Core rechazaría liberarles dinero.
-    comercios_con_contracargo = (
-        {m.comercio_id for m in movimientos if m.tipo == TipoMovimiento.CONTRACARGO and m.referencia in por_referencia}
-        if params.retener_ventas_con_contracargo
-        else set()
-    )
+    en_riesgo = comercios_en_riesgo(movimientos, por_referencia, params, historial_comercios)
     vistos: set[tuple[str, TipoMovimiento]] = set()
-    contracargos_por_comercio: Counter[str] = Counter()
     decisiones: list[Decision] = []
 
     for mov in movimientos:
@@ -90,9 +104,8 @@ def conciliar(
             continue
 
         if mov.tipo == TipoMovimiento.CONTRACARGO:
-            contracargos_por_comercio[mov.comercio_id] += 1
-            if t.comercio_bloqueado:
-                decisiones.append(Decision(mov, Accion.YA_PROCESADO, Motivo.COMERCIO_YA_BLOQUEADO, transaccion=t, regla="R3-ya-bloqueado"))
+            if t.estado == EstadoTransaccion.BLOQUEADA:  # la retención ya se aplicó en una corrida anterior o a mano
+                decisiones.append(Decision(mov, Accion.YA_PROCESADO, Motivo.RETENCION_YA_APLICADA, transaccion=t, regla="R3-ya-retenida"))
                 continue
             motivo = Motivo.CONTRACARGO_CON_MATCH
             nota = ""
@@ -102,11 +115,10 @@ def conciliar(
             elif abs(t.monto_centavos - mov.monto_centavos) > params.tolerancia_monto_centavos:
                 motivo = Motivo.CONTRACARGO_PARCIAL
                 nota = f"Contracargo por {mov.monto_centavos} sobre venta de {t.monto_centavos}."
-            d = Decision(mov, Accion.BLOQUEAR, motivo, transaccion=t, regla="R4-contracargo", nota=nota)
-            d.requiere_aprobacion = (
-                mov.monto_centavos > params.umbral_aprobacion_centavos or contracargos_por_comercio[mov.comercio_id] > params.max_contracargos_comercio_dia
-            )
-            decisiones.append(d)
+            if mov.comercio_id in en_riesgo:
+                nota = (nota + " " if nota else "") + "Comercio sobre el umbral de riesgo: Riesgos decide si suspende."
+            # retener el importe en disputa es protector y reversible: se ejecuta sin doble control
+            decisiones.append(Decision(mov, Accion.BLOQUEAR, motivo, transaccion=t, regla="R4-contracargo", nota=nota))
             continue
 
         # VENTA
@@ -149,15 +161,15 @@ def conciliar(
                 )
             )
             continue
-        if mov.comercio_id in comercios_con_contracargo:
+        if mov.comercio_id in en_riesgo:
             decisiones.append(
                 Decision(
                     mov,
                     Accion.EXCEPCION,
-                    Motivo.CONTRACARGO_MISMO_DIA,
+                    Motivo.COMERCIO_EN_RIESGO,
                     transaccion=t,
-                    regla="R8b-contracargo-hoy",
-                    nota="El comercio trae contracargo hoy: se bloquea primero y la liquidación la decide un humano.",
+                    regla="R8b-comercio-en-riesgo",
+                    nota="El comercio supera el umbral de contracargos: Riesgos decide si libera, retiene o suspende.",
                 )
             )
             continue

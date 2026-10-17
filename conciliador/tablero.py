@@ -385,7 +385,7 @@ def generar_html(libro: LibroMayor, dias_atras: int = 30, hoy: date | None = Non
     incidencias = libro.incidencias(desde=desde.isoformat())
     abiertas = [i for i in incidencias if i["estado"] == "ABIERTA"]
     pendientes = libro.excepciones_pendientes(desde=desde.isoformat())
-    prioridad = {"CONTRACARGO_SIN_MATCH": 0, "COMERCIO_BLOQUEADO": 1, "CONTRACARGO_MISMO_DIA": 2}
+    prioridad = {"CONTRACARGO_SIN_MATCH": 0, "COMERCIO_BLOQUEADO": 1, "COMERCIO_EN_RIESGO": 2}
     pendientes.sort(key=lambda e: (prioridad.get(e["motivo"], 9), -e["monto_centavos"]))
 
     recurrentes = libro.consultar(

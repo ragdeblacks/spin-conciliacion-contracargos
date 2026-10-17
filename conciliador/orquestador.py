@@ -15,7 +15,7 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from . import gates
 from .config import Configuracion
@@ -100,7 +100,8 @@ class Orquestador:
 
             # 3. conciliación (pura)
             transacciones = self.ad.core.transacciones_del_dia(fecha_operacion)
-            decisiones = conciliar(movimientos, transacciones, self.cfg.parametros)
+            historial = self.libro.historial_comercios((fecha_operacion - timedelta(days=self.cfg.ventana_riesgo_dias)).isoformat())
+            decisiones = conciliar(movimientos, transacciones, self.cfg.parametros, historial)
             self._asignar_estado_inicial(decisiones)
             self._gate(corrida_id, gates.g_duplicado(decisiones, self.libro.claves_confirmadas()), acumulado)
             self.libro.registrar_decisiones(corrida_id, decisiones)
@@ -232,11 +233,7 @@ class Orquestador:
             total += 1
             t = actuales.get(f["referencia"])
             esperado = "LIQUIDADA" if f["accion"] == Accion.LIQUIDAR.value else "BLOQUEADA"
-            real = (
-                t.estado.value
-                if t and f["accion"] == Accion.LIQUIDAR.value
-                else ("BLOQUEADA" if t and t.comercio_bloqueado else (t.estado.value if t else "AUSENTE"))
-            )
+            real = t.estado.value if t else "AUSENTE"
             if real == esperado:
                 coincidencias += 1
             else:

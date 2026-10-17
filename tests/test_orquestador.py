@@ -38,11 +38,8 @@ def test_modo_autonoma_ejecuta_bloqueos_antes_que_liquidaciones(cfg, libro, dia,
     primer_liq = tipos.index("LIQUIDAR")
     assert "BLOQUEAR" not in tipos[primer_liq:], "ningún bloqueo después de la primera liquidación"
     pendientes = [d for d in r.decisiones if d.estado_ejecucion == EstadoEjecucion.PENDIENTE_APROBACION]
-    assert {d.movimiento.referencia for d in pendientes} == {
-        dia.casos["MONTO_ALTO"][0],
-        *[d.movimiento.referencia for d in r.decisiones if d.requiere_aprobacion and d.accion == Accion.BLOQUEAR],
-    }
-    assert len(core.bloqueos) == 10  # 11 contracargos, 1 pendiente de aprobación por acumulación
+    assert {d.movimiento.referencia for d in pendientes} == {dia.casos["MONTO_ALTO"][0]}, "solo liberar dinero grande espera a una persona"
+    assert len(core.bloqueos) == 11  # las 11 retenciones se ejecutan sin doble control
 
 
 def test_repetir_la_corrida_no_mueve_dinero_dos_veces(cfg, libro, dia, fecha):

@@ -337,6 +337,18 @@ class LibroMayor:
         sql += " ORDER BY c.fecha_operacion, d.id"
         return [dict(f) for f in self.con.execute(sql, args)]
 
+    def historial_comercios(self, desde: str) -> dict[str, tuple[int, int]]:
+        """{comercio: (contracargos, ventas)} desde la fecha dada, para el ratio de riesgo por comercio."""
+        filas = self.con.execute(
+            """SELECT d.comercio_id,
+                      SUM(CASE WHEN d.tipo='CONTRACARGO' THEN 1 ELSE 0 END) cc,
+                      SUM(CASE WHEN d.tipo='VENTA' THEN 1 ELSE 0 END) ventas
+               FROM decisiones d JOIN corridas c ON c.id=d.corrida_id
+               WHERE c.fecha_operacion>=? AND c.estado='CERRADA' GROUP BY d.comercio_id""",
+            (desde,),
+        ).fetchall()
+        return {f["comercio_id"]: (int(f["cc"]), int(f["ventas"])) for f in filas}
+
     def consultar(self, sql: str, args: tuple = ()) -> list[dict]:
         return [dict(f) for f in self.con.execute(sql, args)]
 

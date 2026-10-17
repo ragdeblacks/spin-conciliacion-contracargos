@@ -6,7 +6,7 @@ movimientos reportados por un banco adquirente contra el Core de NetPay.
 ## Glosario
 - Venta: cobro con tarjeta que el banco reporta y que el Core tiene registrado como transacción.
 - Liquidación: liberar al comercio el dinero de ventas conciliadas.
-- Contracargo: el banco revierte una venta por disputa del tarjetahabiente. Se bloquea saldo del comercio para no perder dinero.
+- Contracargo: el banco revierte una venta por disputa del tarjetahabiente. Se retiene en el saldo del comercio el importe en disputa (más comisión) y se netea contra su siguiente liquidación; el resto de sus ventas se liquida normalmente. Si el comercio representa la disputa y gana, la retención se libera.
 - Core: sistema interno donde viven transacciones, estados y saldos de comercios.
 - Excepción: movimiento del banco que las reglas deterministas no pudieron clasificar como LIQUIDAR o BLOQUEAR.
 
@@ -14,11 +14,11 @@ movimientos reportados por un banco adquirente contra el Core de NetPay.
 - R0: referencia repetida dentro del mismo archivo → duplicado en archivo.
 - R1: referencia sin transacción en el Core → sin match (se muestran candidatos parecidos del mismo comercio).
 - R2: moneda distinta entre banco y Core → excepción.
-- R4: contracargo con match → bloquear; parcial si el monto difiere; urgente si la venta ya estaba liquidada.
+- R4: contracargo con match → retener el importe; parcial si el monto difiere; urgente si la venta ya estaba liquidada (se cobra del siguiente corte).
 - R5: venta con monto distinto al Core → excepción monto diferente.
 - R6: fecha del banco fuera de la tolerancia de días respecto al Core → excepción fecha.
 - R8: venta sobre comercio con saldo bloqueado → no se libera sin revisión.
-- R8b: venta de un comercio que hoy trae contracargo → se retiene; un humano decide si liquidar el resto.
+- R8b: venta de un comercio que supera el umbral de riesgo (más de N contracargos en el día o ratio histórico ≥ 1.5 % con volumen) → revisión de Riesgos.
 
 ## Causas frecuentes observadas por Operaciones
 - Referencia truncada o con prefijo distinto entre banco y Core (match parcial por los primeros 6 caracteres).
