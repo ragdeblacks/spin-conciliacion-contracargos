@@ -22,9 +22,10 @@ def test_las_fallas_abren_incidencias_y_se_resuelven(cfg, libro, dia, fecha):
     tipos = sorted({i["tipo"] for i in abiertas})
     assert tipos == ["ACCION_FALLIDA", "CONTRACARGO_SIN_MATCH"]
     assert all(i["corrida_id"] == r.corrida_id for i in abiertas)
-    # repetir la corrida no duplica incidencias abiertas iguales
+    # repetir la corrida no duplica un problema que sigue abierto
     orq.correr(fecha, hoy=fecha + timedelta(days=1))
-    assert len([i for i in libro.incidencias(solo_abiertas=True) if i["tipo"] == "ACCION_FALLIDA"]) == 2  # una por corrida
+    assert len([i for i in libro.incidencias(solo_abiertas=True) if i["tipo"] == "ACCION_FALLIDA"]) == 1
+    assert len([i for i in libro.incidencias(solo_abiertas=True) if i["tipo"] == "CONTRACARGO_SIN_MATCH"]) == 1
     inc = abiertas[0]
     libro.resolver_incidencia(inc["id"], "Ana López", "resuelto a mano")
     assert libro.incidencias(solo_abiertas=False)[-1]["estado"] in ("ABIERTA", "RESUELTA")

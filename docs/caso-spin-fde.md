@@ -164,11 +164,11 @@ Para el tablero se simularon además 30 días completos siguiendo el plan de ado
 
 El repositorio incluye el conciliador completo, los dos simuladores, el generador de datos, 41 pruebas automatizadas, Docker Compose y el pipeline de integración continua.
 
-| Corrida contra los simuladores | Resultado |
+| Corrida contra los simuladores (Docker Compose) | Resultado |
 |---|---|
-| Sombra, 0.9 s | 186 movimientos: 143 a liquidar, 11 a bloquear, 30 apartados o excepciones con sugerencia, 2 ya procesados. No tocó el Core |
-| Autónoma, 9.6 s | 154 acciones: 11 bloqueos por la interfaz del Core con captura de evidencia y 141 liquidaciones por la API interna. Una liquidación de monto alto quedó en doble control, un supervisor la aprobó y se ejecutó |
-| Comparación sombra contra Core | 154 de 154 coincidencias |
+| Sombra, 1 s | 186 movimientos: 158 a liquidar, 11 a bloquear, 15 apartados o excepciones con sugerencia, 2 ya procesados. No tocó el Core |
+| Autónoma, 17 s en contenedores | 169 acciones: 11 bloqueos por la interfaz del Core con captura de evidencia y 158 liquidaciones por la API interna. Una liquidación de monto alto quedó en doble control, un supervisor la aprobó y se ejecutó |
+| Comparación sombra contra Core | 169 de 169 coincidencias |
 
 Lo que el prototipo todavía no cubre: corre contra servicios simulados, el libro mayor es SQLite y las pruebas usan el adaptador determinista de IA para no depender de una llave ni gastar en integración continua. Los adaptadores reales existen y están validados contra el esquema.
 

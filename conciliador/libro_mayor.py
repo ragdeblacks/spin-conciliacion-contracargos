@@ -287,9 +287,10 @@ class LibroMayor:
 
     # --- incidencias y resoluciones (gestión humana) ----------------------
     def abrir_incidencia(self, corrida_id: int | None, fecha_operacion: str, tipo: str, severidad: str, descripcion: str) -> int:
+        # un mismo problema abierto no se duplica aunque lo detecten varias corridas (p. ej. al repetir el día)
         ya = self.con.execute(
-            "SELECT id FROM incidencias WHERE corrida_id IS ? AND tipo=? AND descripcion=? AND estado='ABIERTA'",
-            (corrida_id, tipo, descripcion),
+            "SELECT id FROM incidencias WHERE tipo=? AND descripcion=? AND estado='ABIERTA'",
+            (tipo, descripcion),
         ).fetchone()
         if ya:
             return int(ya["id"])
