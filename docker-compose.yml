@@ -3,6 +3,7 @@
 #   docker compose run --rm conciliador correr --fecha 2026-10-15 --modo sombra
 services:
   banco-portal:
+    image: spin-conciliacion:local
     build: .
     entrypoint: ["uvicorn", "mocks.banco_portal.app:app", "--host", "0.0.0.0", "--port", "8001"]
     environment:
@@ -14,6 +15,7 @@ services:
     healthcheck: {test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8001/health')"], interval: 5s, retries: 10}
 
   core-netpay:
+    image: spin-conciliacion:local
     build: .
     entrypoint: ["uvicorn", "mocks.core_netpay.app:app", "--host", "0.0.0.0", "--port", "8002"]
     environment:
@@ -26,6 +28,7 @@ services:
     healthcheck: {test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8002/health')"], interval: 5s, retries: 10}
 
   conciliador:
+    image: spin-conciliacion:local
     build: .
     depends_on:
       banco-portal: {condition: service_healthy}

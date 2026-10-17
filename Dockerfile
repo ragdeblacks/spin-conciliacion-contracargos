@@ -9,8 +9,9 @@ COPY mocks ./mocks
 COPY contexto ./contexto
 COPY prompts ./prompts
 RUN uv pip install --no-cache . && playwright install chromium
-# usuario sin privilegios: el contenedor no corre como root
-RUN useradd -m conciliador && mkdir -p /app/datos /app/evidencia && chown -R conciliador /app
-USER conciliador
+# usuario sin privilegios: `ubuntu` (uid/gid 1000) ya existe en la imagen base y coincide con el uid
+# habitual del desarrollador, así que los volúmenes montados (datos/, evidencia/) son escribibles
+RUN mkdir -p /app/datos /app/evidencia && chown -R ubuntu:ubuntu /app
+USER ubuntu
 ENTRYPOINT ["conciliador"]
 CMD ["--help"]
