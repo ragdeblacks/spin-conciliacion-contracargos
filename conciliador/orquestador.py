@@ -114,12 +114,14 @@ class Orquestador:
             triar_excepciones(decisiones, self.ad.asistente, self.libro, corrida_id, self.cfg)
 
             # 6. cierre
-            self._gate(corrida_id, gates.g_cierre(decisiones, self.cfg.modo), acumulado)
+            cierre = gates.g_cierre(decisiones, self.cfg.modo)
+            self._gate(corrida_id, cierre, acumulado)
             res = resumen(decisiones)
             tasa = res.get("EXCEPCION", 0) / res["TOTAL"] if res.get("TOTAL") else 0.0
             self._gate(corrida_id, gates.g_deriva(tasa, self.libro.tasa_excepciones_historica()), acumulado)
             self._gate(corrida_id, gates.g_latencia(datetime.now().strftime("%H:%M"), self.cfg.hora_limite), acumulado)
-            estado = "CERRADA"
+            # lo que falló quedó aislado y con incidencia; el resto se ejecutó: la corrida cierra, no se detiene
+            estado = "CERRADA" if cierre.ok else "CERRADA_CON_INCIDENCIAS"
         except GateCriticoFallido as e:
             estado = "DETENIDA"
             res = resumen(decisiones) if decisiones else {}
@@ -131,16 +133,16 @@ class Orquestador:
             self.ad.notificador.enviar(f"Conciliación {fecha_operacion} ERROR", f"{type(e).__name__}: {e}", "critico")
         self.libro.cerrar_corrida(corrida_id, estado, res)
         self._abrir_incidencias(corrida_id, fecha_operacion, estado, decisiones, acumulado)
-        latido(self.cfg.url_latido, estado == "CERRADA", corrida_id)
+        latido(self.cfg.url_latido, estado.startswith("CERRADA"), corrida_id)
         duracion = time.monotonic() - inicio
-        if estado == "CERRADA":
-            self._notificar_resumen(fecha_operacion, res, decisiones, duracion)
+        if estado.startswith("CERRADA"):
+            self._notificar_resumen(fecha_operacion, res, decisiones, duracion, estado)
         return ResultadoCorrida(corrida_id, estado, decisiones, acumulado, res, duracion)
 
     def _abrir_incidencias(self, corrida_id: int, fecha: date, estado: str, decisiones: list[Decision], gates_evaluados: list[ResultadoGate]) -> None:
         """Todo lo que salió mal queda como incidencia con dueño pendiente, para la gestión del día siguiente."""
         f = fecha.isoformat()
-        if estado != "CERRADA":
+        if not estado.startswith("CERRADA"):
             ultimo = next((g for g in reversed(gates_evaluados) if not g.ok and g.critico), None)
             desc = f"{ultimo.gate}: {ultimo.detalle}" if ultimo else "error no controlado"
             self.libro.abrir_incidencia(corrida_id, f, "CORRIDA_DETENIDA", "critica", desc)
@@ -171,7 +173,14 @@ class Orquestador:
         for d in [d for d in aprobadas if d.accion == Accion.BLOQUEAR]:
             self._ejecutar_una(corrida_id, d)
         self._gate(corrida_id, gates.g_orden(decisiones), acumulado)
+        # procesamiento por excepciones: un bloqueo fallido aparta solo los pagos de ESE comercio; los demás avanzan
+        con_bloqueo_fallido = {d.movimiento.comercio_id for d in decisiones if d.accion == Accion.BLOQUEAR and d.estado_ejecucion == EstadoEjecucion.FALLIDA}
         for d in [d for d in aprobadas if d.accion == Accion.LIQUIDAR]:
+            if d.movimiento.comercio_id in con_bloqueo_fallido:
+                d.estado_ejecucion = EstadoEjecucion.APARTADA
+                d.nota = (d.nota + " " if d.nota else "") + "Apartada: el bloqueo de este comercio falló en esta corrida."
+                self.libro.actualizar_estado_decision(d.id, d.estado_ejecucion)
+                continue
             self._ejecutar_una(corrida_id, d)
 
     def _ejecutar_una(self, corrida_id: int, d: Decision) -> None:
@@ -242,14 +251,17 @@ class Orquestador:
         self.libro.registrar_gate(corrida_id, r)
         return {"gate": r, "coincidencias": coincidencias, "total": total, "diferencias": diferencias}
 
-    def _notificar_resumen(self, fecha: date, res: dict, decisiones: list[Decision], duracion: float) -> None:
+    def _notificar_resumen(self, fecha: date, res: dict, decisiones: list[Decision], duracion: float, estado: str) -> None:
         pend = sum(1 for d in decisiones if d.estado_ejecucion == EstadoEjecucion.PENDIENTE_APROBACION)
+        fallidas = sum(1 for d in decisiones if d.estado_ejecucion == EstadoEjecucion.FALLIDA)
+        apartadas = sum(1 for d in decisiones if d.estado_ejecucion == EstadoEjecucion.APARTADA)
         cuerpo = (
             f"modo {self.cfg.modo} · {res.get('TOTAL', 0)} movimientos · liquidar {res.get('LIQUIDAR', 0)} · "
             f"bloquear {res.get('BLOQUEAR', 0)} · excepciones {res.get('EXCEPCION', 0)} · "
-            f"pendientes de aprobación {pend} · {duracion:.1f}s"
+            f"pendientes de aprobación {pend} · fallidas {fallidas} · apartadas {apartadas} · {duracion:.1f}s"
         )
-        self.ad.notificador.enviar(f"Conciliación {fecha} cerrada", cuerpo, "alerta" if pend else "info")
+        titulo = f"Conciliación {fecha} cerrada" + (" con incidencias" if estado != "CERRADA" else "")
+        self.ad.notificador.enviar(titulo, cuerpo, "critico" if fallidas else ("alerta" if pend else "info"))
 
 
 def _decision_desde_fila(f: dict) -> Decision:

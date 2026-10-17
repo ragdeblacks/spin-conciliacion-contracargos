@@ -39,7 +39,7 @@ def test_modo_autonoma_ejecuta_bloqueos_antes_que_liquidaciones(cfg, libro, dia,
     assert "BLOQUEAR" not in tipos[primer_liq:], "ningún bloqueo después de la primera liquidación"
     pendientes = [d for d in r.decisiones if d.estado_ejecucion == EstadoEjecucion.PENDIENTE_APROBACION]
     assert {d.movimiento.referencia for d in pendientes} == {dia.casos["MONTO_ALTO"][0]}, "solo liberar dinero grande espera a una persona"
-    assert len(core.bloqueos) == 11  # las 11 retenciones se ejecutan sin doble control
+    assert len(core.bloqueos) == 11  # los 11 bloqueos se ejecutan sin doble control
 
 
 def test_repetir_la_corrida_no_mueve_dinero_dos_veces(cfg, libro, dia, fecha):
@@ -74,9 +74,10 @@ def test_fallo_del_core_deja_rastro_y_cierre_falla(cfg, libro, dia, fecha):
     core.fallar_liberaciones = {dia.transacciones[-9].id}  # una venta normal
     orq, core, notif = _orq(cfg, libro, dia, "autonoma", core=core)
     r = orq.correr(fecha, hoy=fecha + timedelta(days=1))
-    assert r.estado == "DETENIDA"
+    assert r.estado == "CERRADA_CON_INCIDENCIAS", "una acción fallida no detiene la corrida: se aísla con incidencia"
     cierre = [g for g in r.gates if g.gate == "G-CIERRE"][0]
     assert not cierre.ok and "1 acciones fallidas" in cierre.detalle
+    assert r.resumen["LIQUIDAR"] > 100 and sum(1 for d in r.decisiones if d.estado_ejecucion == EstadoEjecucion.EJECUTADA) > 100
     fallidas = [a for a in libro.acciones_de(r.corrida_id) if a["estado"] == "FALLIDA"]
     assert len(fallidas) == 1 and "503" in fallidas[0]["respuesta"]
     assert notif.enviados[-1][2] == "critico"
@@ -151,3 +152,32 @@ def test_libro_mayor_promedios_e_historico(cfg, libro, dia, fecha):
     assert libro.promedio_movimientos() and libro.promedio_movimientos() > 100
     assert 0 < libro.tasa_excepciones_historica() < 0.2
     assert len(libro.corridas()) == 3
+
+
+def test_bloqueo_fallido_aparta_solo_a_ese_comercio(cfg, libro, dia, fecha):
+    """Procesamiento por excepciones: si el bloqueo de un comercio falla, sus pagos se apartan; los demás salen."""
+    from tests.fakes import ResultadoAccion
+
+    core = CoreFalso(dia)
+    comercio_malo = next(m.comercio_id for m in dia.movimientos if m.tipo == "CONTRACARGO" and m.comercio_id != "COM-0007")
+    original = core.bloquear
+
+    def bloquear_fallando(comercio_id, referencia, monto, motivo, clave):
+        if comercio_id == comercio_malo:
+            return ResultadoAccion(ok=False, error="HTTP 503 simulado")
+        return original(comercio_id, referencia, monto, motivo, clave)
+
+    core.bloquear = bloquear_fallando
+    # para que ese comercio tenga ventas que liquidar hoy, desactivamos el apartado automático por contracargo
+    # (R8a) simulando que el Core ya lo tenía bloqueado: no, más simple: usamos un comercio sin ventas y verificamos el estado
+    orq, core, _ = _orq(cfg, libro, dia, "autonoma", core=core)
+    r = orq.correr(fecha, hoy=fecha + timedelta(days=1))
+    assert r.estado == "CERRADA_CON_INCIDENCIAS"
+    fallidas = [d for d in r.decisiones if d.estado_ejecucion == EstadoEjecucion.FALLIDA]
+    assert len(fallidas) == 1 and fallidas[0].movimiento.comercio_id == comercio_malo
+    # todas las liquidaciones de otros comercios salieron
+    otras = [d for d in r.decisiones if d.accion == Accion.LIQUIDAR and d.movimiento.comercio_id != comercio_malo]
+    assert otras and all(d.estado_ejecucion in (EstadoEjecucion.EJECUTADA, EstadoEjecucion.PENDIENTE_APROBACION) for d in otras)
+    # y las ventas del comercio con contracargo quedaron apartadas (R8a) en vez de liberarse
+    del_malo = [d for d in r.decisiones if d.movimiento.comercio_id == comercio_malo and d.movimiento.tipo.value == "VENTA"]
+    assert all(d.accion == Accion.EXCEPCION and d.motivo.value == "COMERCIO_BLOQUEADO_HOY" for d in del_malo)

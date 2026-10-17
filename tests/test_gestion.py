@@ -17,9 +17,10 @@ def test_las_fallas_abren_incidencias_y_se_resuelven(cfg, libro, dia, fecha):
     core.fallar_liberaciones = {dia.transacciones[-9].id}
     orq, _ = _orq(cfg, libro, dia, "autonoma", core=core)
     r = orq.correr(fecha, hoy=fecha + timedelta(days=1))
+    assert r.estado == "CERRADA_CON_INCIDENCIAS", "lo que falló se aísla; la corrida no se detiene"
     abiertas = libro.incidencias(solo_abiertas=True)
     tipos = sorted({i["tipo"] for i in abiertas})
-    assert tipos == ["ACCION_FALLIDA", "CONTRACARGO_SIN_MATCH", "CORRIDA_DETENIDA"]
+    assert tipos == ["ACCION_FALLIDA", "CONTRACARGO_SIN_MATCH"]
     assert all(i["corrida_id"] == r.corrida_id for i in abiertas)
     # repetir la corrida no duplica incidencias abiertas iguales
     orq.correr(fecha, hoy=fecha + timedelta(days=1))

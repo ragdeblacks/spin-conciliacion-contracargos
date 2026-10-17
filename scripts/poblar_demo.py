@@ -61,7 +61,7 @@ def main() -> None:
         inicio = datetime.combine(fecha + timedelta(days=1), datetime.min.time(), tzinfo=UTC).replace(hour=11, minute=0)  # 05:00 CDMX
         _reubicar(libro, r.corrida_id, inicio, rnd)
 
-        if r.estado != "CERRADA":
+        if not r.estado.startswith("CERRADA"):
             for i in libro.incidencias(solo_abiertas=True):
                 if i["corrida_id"] == r.corrida_id:
                     nota = (

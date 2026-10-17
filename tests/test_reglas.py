@@ -19,7 +19,10 @@ def test_casos_de_la_semilla(movimientos, transacciones, dia):
     for ref in c["NORMAL"]:
         assert por[ref][0].accion == Accion.LIQUIDAR and por[ref][0].motivo == Motivo.MATCH_EXACTO
     for ref in c["VENTA_DE_COMERCIO_EN_RIESGO"]:
-        assert por[ref][0].motivo == Motivo.COMERCIO_EN_RIESGO and por[ref][0].accion == Accion.EXCEPCION
+        # COM-0007 trae contracargo hoy: sus ventas se apartan por el bloqueo del día (R8a va antes que el umbral)
+        assert por[ref][0].motivo == Motivo.COMERCIO_BLOQUEADO_HOY and por[ref][0].accion == Accion.EXCEPCION
+    for ref in c["VENTA_DE_COMERCIO_CON_CONTRACARGO"]:
+        assert por[ref][0].motivo == Motivo.COMERCIO_BLOQUEADO_HOY
     assert c["VENTA_DE_COMERCIO_EN_RIESGO"], "la semilla debe incluir ventas del comercio que supera el umbral"
     (alto,) = c["MONTO_ALTO"]
     assert por[alto][0].accion == Accion.LIQUIDAR and por[alto][0].requiere_aprobacion

@@ -6,7 +6,7 @@ movimientos reportados por un banco adquirente contra el Core de NetPay.
 ## Glosario
 - Venta: cobro con tarjeta que el banco reporta y que el Core tiene registrado como transacción.
 - Liquidación: liberar al comercio el dinero de ventas conciliadas.
-- Contracargo: el banco revierte una venta por disputa del tarjetahabiente. Se retiene en el saldo del comercio el importe en disputa (más comisión) y se netea contra su siguiente liquidación; el resto de sus ventas se liquida normalmente. Si el comercio representa la disputa y gana, la retención se libera.
+- Contracargo: el banco revierte una venta por disputa del tarjetahabiente. Operaciones bloquea el saldo del comercio en el Core para evitar la pérdida; mientras esté bloqueado, sus liquidaciones las decide una persona.
 - Core: sistema interno donde viven transacciones, estados y saldos de comercios.
 - Excepción: movimiento del banco que las reglas deterministas no pudieron clasificar como LIQUIDAR o BLOQUEAR.
 
@@ -14,7 +14,8 @@ movimientos reportados por un banco adquirente contra el Core de NetPay.
 - R0: referencia repetida dentro del mismo archivo → duplicado en archivo.
 - R1: referencia sin transacción en el Core → sin match (se muestran candidatos parecidos del mismo comercio).
 - R2: moneda distinta entre banco y Core → excepción.
-- R4: contracargo con match → retener el importe; parcial si el monto difiere; urgente si la venta ya estaba liquidada (se cobra del siguiente corte).
+- R4: contracargo con match → bloquear el saldo del comercio; parcial si el monto difiere; urgente si la venta ya estaba liquidada.
+- R8a: venta de un comercio que hoy queda bloqueado por contracargo → se aparta; una persona decide si se libera.
 - R5: venta con monto distinto al Core → excepción monto diferente.
 - R6: fecha del banco fuera de la tolerancia de días respecto al Core → excepción fecha.
 - R8: venta sobre comercio con saldo bloqueado → no se libera sin revisión.

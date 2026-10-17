@@ -71,6 +71,7 @@ def g_cierre(decisiones: list[Decision], modo: str) -> ResultadoGate:
         EstadoEjecucion.OMITIDA_IDEMPOTENTE,
         EstadoEjecucion.SOMBRA,
         EstadoEjecucion.PENDIENTE_APROBACION,
+        EstadoEjecucion.APARTADA,
     }
     fallidas = [d for d in ejecutables if d.estado_ejecucion == EstadoEjecucion.FALLIDA]
     sin_estado = [d for d in ejecutables if d.estado_ejecucion not in finales | {EstadoEjecucion.FALLIDA}]
@@ -78,10 +79,10 @@ def g_cierre(decisiones: list[Decision], modo: str) -> ResultadoGate:
         return ResultadoGate(
             "G-CIERRE",
             False,
-            True,
-            f"{len(fallidas)} acciones fallidas, {len(sin_estado)} sin estado final: revisar antes del corte",
+            False,  # no detiene: lo demás ya se ejecutó. Marca la corrida como cerrada con incidencias.
+            f"{len(fallidas)} acciones fallidas, {len(sin_estado)} sin estado final: cada una abre una incidencia",
         )
-    return ResultadoGate("G-CIERRE", True, True, f"{len(ejecutables)} acciones con estado final consistente (modo {modo})")
+    return ResultadoGate("G-CIERRE", True, False, f"{len(ejecutables)} acciones con estado final consistente (modo {modo})")
 
 
 # --- no críticos ----------------------------------------------------------

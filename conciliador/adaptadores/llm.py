@@ -77,6 +77,7 @@ SUGERENCIAS_POR_MOTIVO = {
     "DUPLICADO_EN_ARCHIVO": ("Misma referencia repetida en el archivo del banco", "IGNORAR_DUPLICADO", 0.9),
     "COMERCIO_BLOQUEADO": ("Venta de un comercio con saldo bloqueado", "BLOQUEAR_MANUAL", 0.6),
     "COMERCIO_EN_RIESGO": ("Comercio por encima del umbral de contracargos", "REVISAR_CON_COMERCIO", 0.6),
+    "COMERCIO_BLOQUEADO_HOY": ("Venta de un comercio bloqueado hoy por contracargo", "REVISAR_CON_COMERCIO", 0.6),
     "MONEDA_DISTINTA": ("Moneda del banco distinta a la del Core", "ESCALAR_AL_BANCO", 0.7),
 }
 

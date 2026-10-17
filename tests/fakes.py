@@ -46,7 +46,8 @@ class CoreFalso:
                 t.moneda,
                 t.comercio_id,
                 EstadoTransaccion(self._estados_iniciales[t.id] if self.estado_congelado else t.estado),
-                comercio_bloqueado=t.comercio_id in self.dia.comercios_bloqueados,
+                comercio_bloqueado=t.comercio_id in self.dia.comercios_bloqueados
+                or (not self.estado_congelado and any(c == t.comercio_id for c, _ in self.bloqueos)),
             )
             for t in self.dia.transacciones
         ]
@@ -55,10 +56,8 @@ class CoreFalso:
         if transaccion_id in self.fallar_liberaciones:
             return ResultadoAccion(ok=False, error="HTTP 503 simulado")
         tx = next(t for t in self.dia.transacciones if t.id == transaccion_id)
-        if tx.comercio_id in self.dia.comercios_bloqueados:
-            return ResultadoAccion(ok=False, error="HTTP 422: comercio suspendido por Riesgos")
-        if any(r == tx.referencia for _, r in self.bloqueos):
-            return ResultadoAccion(ok=False, error="HTTP 422: la venta está en disputa")
+        if tx.comercio_id in self.dia.comercios_bloqueados or any(c == tx.comercio_id for c, _ in self.bloqueos):
+            return ResultadoAccion(ok=False, error="HTTP 422: comercio con saldo bloqueado")
         ya = transaccion_id in self.liberadas
         if not ya:
             self.liberadas.append(transaccion_id)

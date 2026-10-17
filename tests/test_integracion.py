@@ -86,7 +86,7 @@ def test_adaptadores_api_contra_mocks(servicios, cfg, libro, fecha):
     r2 = Orquestador(cfg, libro, ad).correr(fecha, hoy=fecha + timedelta(days=1))
     assert r2.estado == "CERRADA" and r2.resumen["YA_PROCESADO"] >= len(ejecutadas)
     c = httpx.get(f"{servicios['core']}/api/comercios/COM-0007", headers={"Authorization": "Bearer token-core-demo"}).json()
-    assert not c["suspendido"] and len(c["retenciones"]) == 4  # se retienen los 4 importes; suspender es decisión de Riesgos
+    assert c["bloqueado"] and len(c["bloqueos"]) == 4  # escenario B: el comercio queda bloqueado y sus 4 contracargos registrados
 
 
 def test_liberar_es_idempotente_en_el_core(servicios):

@@ -28,7 +28,9 @@ Lo sostienen tres argumentos, que desarrollo en las páginas siguientes: **prote
 
 La automatización vale la pena solo si no puede perder dinero por su cuenta. Esa condición define cinco decisiones de diseño.
 
-**Un contracargo retiene el importe en disputa, no al comercio.** Así operan los adquirentes: el importe del contracargo, más su comisión, se retiene en el saldo del comercio y se netea contra su siguiente liquidación o se cobra de una reserva; el resto de sus ventas se liquida con normalidad, y si el comercio representa la disputa y gana, la retención se libera (la comisión no). Por eso "bloquear saldo" en este diseño significa retener ese importe, y la retención se ejecuta sin doble control porque es protectora y reversible. Dentro de la corrida van primero las retenciones y después las liquidaciones, con un gate (un control que detiene el proceso si no se cumple; los términos y los nombres de los controles están en el glosario al final) que impide liberar mientras quede una retención sin intentar: así el neteo ocurre antes de que salga el dinero. Suspender a un comercio es otra cosa: una decisión de Riesgos, nunca un efecto automático. El sistema solo la propone cuando el comercio supera umbrales del estilo de los programas de monitoreo de las redes (Visa VAMP baja a 1.5 % de disputas sobre transacciones en abril de 2026; Mastercard ECM arranca en 1.5 % con cien o más contracargos al mes): más de tres contracargos en un día o un ratio de 1.5 % en treinta días con volumen suficiente. En ese caso sus ventas pasan a revisión y una persona decide si libera, retiene o suspende. Los umbrales son configuración y se acuerdan con Riesgos.
+**Los dos escenarios del caso, tal como operan hoy, los ejecuta el sistema; la persona decide solo lo que tiene problema.** En el escenario A, cuando los datos coinciden según las reglas acordadas, el sistema llama la misma API REST interna de NetPay que hoy ejecuta el analista, con clave de idempotencia y rastro antes y después. En el escenario B, cuando el banco reporta un contracargo, el sistema bloquea el saldo del comercio en el Core por la misma interfaz que hoy usa el analista, mediante un robot que reproduce sus pasos y deja captura de pantalla como evidencia. Bloquear es protector, así que nunca espera aprobación; liberar un monto alto sí.
+
+**Lo que tiene problema se aparta; todo lo demás avanza.** Es la forma en que operan los procesos de conciliación y liquidación: cada movimiento se decide por separado, y una partida con problema va a una cola con dueño mientras el resto se liquida. Dentro de la corrida van primero los bloqueos y después las liquidaciones, con un gate (un control que detiene el paso si no se cumple; los términos y los nombres de los controles están en el glosario al final) que impide liberar mientras quede un bloqueo sin intentar. Un comercio que hoy queda bloqueado por contracargo no recibe liquidación automática: sus ventas del día quedan apartadas para que una persona decida, y los demás comercios cobran. Si el bloqueo de un comercio falla, se apartan únicamente los pagos de ese comercio y se abre una incidencia; el proceso no se detiene. La corrida completa se detiene solo en tres situaciones en las que no existe un "parcial" seguro: archivo del banco ilegible o con volumen anómalo, Core sin responder, o credenciales ausentes. Y aun entonces Operaciones puede continuar con carga manual del archivo.
 
 **Ninguna acción se ejecuta dos veces.** Cada liquidación y cada bloqueo llevan una clave única derivada del movimiento. La clave viaja al Core en la cabecera de idempotencia y se guarda en un libro mayor propio, de solo inserción. Repetir una corrida, reanudarla después de un corte o correrla contra un Core que devuelve estados atrasados no libera ni bloquea nada de nuevo. Hay una prueba automatizada para cada uno de esos tres escenarios.
 
@@ -95,14 +97,14 @@ Un pipeline que corre en mi laptop no resuelve nada a las cinco de la mañana. E
 | El modelo de IA no responde | Usa la respuesta determinista | Nada |
 | Hay que parar todo | Cambia a modo sombra o se suspende la tarea | Un comando del supervisor, sin despliegue |
 
-**Cómo se ve la gestión.** Todo lo que el pipeline decide, ejecuta, detiene o sugiere queda en el libro mayor con su marca de tiempo, y de ahí sale un tablero para el líder de Operaciones: semáforos contra objetivo, pestañas por día, semana y mes, la lista de incidencias abiertas con antigüedad y quién la cerró, la cola de excepciones ordenada por riesgo y monto, y las excepciones que se repiten en un mismo comercio, que son las candidatas a convertirse en regla. Cada falla (corrida detenida, acción fallida, contracargo sin match, gate en rojo) abre una incidencia que alguien tiene que cerrar con su nombre y una nota; cada excepción se cierra registrando qué decidió el analista, lo que permite medir si la sugerencia de la IA le sirvió y cuánto tardó. En el prototipo el tablero es una página que se genera con un comando; en producción las mismas consultas alimentan Grafana o Datadog.
+**Cómo se ve la gestión.** Todo lo que el pipeline decide, ejecuta, aparta o sugiere queda en el libro mayor con su marca de tiempo, y de ahí sale un tablero para el líder de Operaciones: semáforos contra objetivo, pestañas por día, semana y mes, la lista de incidencias abiertas con antigüedad y quién la cerró, el dinero apartado por comercio con el motivo (bloqueado hoy por contracargo, bloqueo fallido, doble control, umbral de riesgo) para que cada problema se ataque sabiendo cuánto libera, la cola de excepciones ordenada por riesgo y monto, y las excepciones que se repiten en un mismo comercio, que son las candidatas a convertirse en regla. Cada corrida termina en uno de tres estados: cerrada, cerrada con incidencias (algo falló y quedó aislado con dueño) o detenida (uno de los tres casos de entrada). Cada falla (corrida detenida, acción fallida, contracargo sin match, gate en rojo) abre una incidencia que alguien tiene que cerrar con su nombre y una nota; cada excepción se cierra registrando qué decidió el analista, lo que permite medir si la sugerencia de la IA le sirvió y cuánto tardó. En el prototipo el tablero es una página que se genera con un comando; en producción las mismas consultas alimentan Grafana o Datadog.
 
 <figure>
 <img src="img/tablero.png" alt="Tablero de gestión" class="evidencia" style="max-width:68%">
 <figcaption>Tablero generado desde el libro mayor con 30 días simulados (semáforos, series por día y detalle; más abajo incidencias y excepciones).</figcaption>
 </figure>
 
-**Riesgos que veo.** Que las reglas del analista sean más complejas de lo que parecen; por eso el discovery es con el analista y la fase sombra dura tres semanas. Que el Core rechace acciones por reglas internas que nadie documentó; en la simulación ocurrió con una suposición mía sobre el Core, y el mecanismo para absorberlo ya existe: todo rechazo queda como acción fallida e incidencia, y de ahí sale una regla explícita (sección 4). Que Operaciones no confíe en el sistema; la comparación visible en sombra y la última palabra humana en asistida existen para eso.
+**Riesgos que veo.** Que las reglas del analista sean más complejas de lo que parecen; por eso el discovery es con el analista y la fase sombra dura tres semanas. Que el Core rechace acciones por reglas internas que nadie documentó; el mecanismo para absorberlo ya existe: todo rechazo queda como acción fallida con incidencia y dinero apartado visible, sin detener al resto, y de ahí sale una regla explícita (sección 4). Que Operaciones no confíe en el sistema; la comparación visible en sombra y la última palabra humana en asistida existen para eso.
 
 ## 4. La evidencia
 
@@ -115,11 +117,11 @@ Los nombres que empiezan con G- son los controles (gates) del pipeline. Cada uno
 | Arranque: credenciales desde el gestor, Core vivo | G-SECRETOS, G-CORE-VIVO | No se toca nada; alerta |
 | Ingesta del CSV por el adaptador activo | G-ESQUEMA, G-VOLUMEN | Se detiene; carga manual |
 | Conciliación con reglas explicables | G-DUPLICADO | |
-| Retención del importe de cada contracargo | Sin doble control (protectora, reversible) | Acción fallida con rastro |
+| Bloqueo del saldo del comercio por cada contracargo (robot sobre la UI del Core) | Sin doble control (protector) | Acción fallida con incidencia; se apartan solo los pagos de ese comercio |
 | Verificación de orden | G-ORDEN | No arrancan liquidaciones |
-| Liquidaciones por API con idempotencia | G-UMBRAL | Acción fallida con rastro |
+| Liquidaciones por la API interna, con idempotencia | G-UMBRAL | Acción fallida con incidencia; lo demás sigue |
 | Triaje de excepciones con el asistente | G-LLM-PII, G-LLM-PRESUPUESTO | El analista trabaja sin sugerencia |
-| Cierre, reporte y alertas | G-CIERRE, G-DERIVA, G-LATENCIA | Corrida marcada para revisión |
+| Cierre, reporte y alertas | G-CIERRE, G-DERIVA, G-LATENCIA | Corrida "cerrada con incidencias" |
 
 ### Dónde entra la inteligencia artificial
 
@@ -140,8 +142,8 @@ Todo lo que se muestra como resultado en este documento corrió contra sistemas 
 | Caso plantado cada día | Cuántos | Qué debe pasar |
 |---|---|---|
 | Ventas normales con match exacto | el grueso | Liquidar |
-| Contracargos con match, uno parcial y uno sobre venta ya liquidada | 7 | Retener el importe |
-| Cuatro contracargos del mismo comercio | 4 | Retener los cuatro y mandar sus ventas a revisión de Riesgos |
+| Contracargos con match, uno parcial y uno sobre venta ya liquidada | 7 | Bloquear el saldo del comercio; sus ventas del día se apartan |
+| Cuatro contracargos del mismo comercio | 4 | Bloquear y señalar el comercio como sobre el umbral de riesgo |
 | Contracargo sin venta en el Core | 1 | Excepción de máxima prioridad e incidencia |
 | Monto distinto entre banco y Core | 3 | Excepción |
 | Referencia sin match, con y sin candidatos parecidos | 2 | Excepción con candidatos para el analista |
@@ -155,17 +157,17 @@ Para el tablero se simularon además 30 días completos siguiendo el plan de ado
 
 **Cómo la arquitectura detecta mejoras, y no solo ejecuta.** La simulación sirvió también para probar que el diseño aprende de la operación, por cuatro vías que ya funcionan en el código:
 
-1. Todo rechazo del Core o del banco queda como acción fallida con la respuesta guardada y abre una incidencia. Fue así como una suposición mía sobre el Core salió a la luz: la simulación rechazó liberar ventas de un comercio con retención, y revisar esa incidencia llevó a corregir la regla hacia la práctica real de la industria.
+1. Todo rechazo del Core o del banco queda como acción fallida con la respuesta guardada, abre una incidencia y aparta solo el dinero afectado. En la simulación se plantó una liberación rechazada y un bloqueo fallido para comprobar que el resto de la corrida sigue y que el problema queda visible con su monto.
 2. Las excepciones que se repiten con el mismo motivo en el mismo comercio aparecen en el tablero como candidatas a regla nueva; cuando el analista las resuelve siempre igual, la regla se escribe, se prueba y se despliega por el mismo camino que el código.
 3. La comparación en modo sombra mide cada día cuánto coincide el sistema con el analista y señala exactamente en qué movimientos difiere: ahí es donde se calibran tolerancias y umbrales con Operaciones.
 4. El control de deriva avisa cuando la tasa de excepciones se dispara, que es la señal temprana de que el banco o el Core cambiaron algo.
 
-El repositorio incluye el conciliador completo, los dos simuladores, el generador de datos, 40 pruebas automatizadas, Docker Compose y el pipeline de integración continua.
+El repositorio incluye el conciliador completo, los dos simuladores, el generador de datos, 41 pruebas automatizadas, Docker Compose y el pipeline de integración continua.
 
 | Corrida contra los simuladores | Resultado |
 |---|---|
-| Sombra, 0.9 s | 186 movimientos: 143 a liquidar, 11 a bloquear, 30 excepciones con sugerencia, 2 ya procesados. No tocó el Core |
-| Autónoma, 9.6 s | 154 acciones: 10 bloqueos por la interfaz del Core con captura de evidencia y 141 liquidaciones por API. Dos decisiones quedaron en doble control, un supervisor las aprobó y se ejecutaron |
+| Sombra, 0.9 s | 186 movimientos: 143 a liquidar, 11 a bloquear, 30 apartados o excepciones con sugerencia, 2 ya procesados. No tocó el Core |
+| Autónoma, 9.6 s | 154 acciones: 11 bloqueos por la interfaz del Core con captura de evidencia y 141 liquidaciones por la API interna. Una liquidación de monto alto quedó en doble control, un supervisor la aprobó y se ejecutó |
 | Comparación sombra contra Core | 154 de 154 coincidencias |
 
 Lo que el prototipo todavía no cubre: corre contra servicios simulados, el libro mayor es SQLite y las pruebas usan el adaptador determinista de IA para no depender de una llave ni gastar en integración continua. Los adaptadores reales existen y están validados contra el esquema.
@@ -187,16 +189,16 @@ MODO=autonoma make demo          # corrida autónoma
 | Adquirente | Banco que procesa los pagos con tarjeta de los comercios de Spin y reporta cada día ventas y contracargos |
 | Contracargo | Reversión de una venta por disputa del tarjetahabiente. El adquirente cobra al comercio el importe más una comisión |
 | Liquidación | Liberar al comercio el dinero de sus ventas conciliadas |
-| Retención (bloqueo de saldo) | Apartar en el saldo del comercio el importe de un contracargo para netearlo contra su siguiente liquidación. No suspende al comercio |
-| Neteo | Pagar al comercio sus ventas menos comisiones, contracargos y retenciones |
-| Reserva | Fondos del comercio que el adquirente conserva para cubrir contracargos que lleguen después de pagar |
-| Representación | Defensa del comercio ante una disputa; si gana, la retención se libera |
-| Comercio en riesgo | Comercio que supera los umbrales de contracargos (por día o por ratio en 30 días); sus ventas pasan a revisión de Riesgos |
+| Bloqueo de saldo | Operación del Core, hoy solo por su interfaz, que impide liberar dinero a un comercio tras un contracargo. Lo quita una persona |
+| Procesamiento por excepciones | Forma de operar en la que lo que está limpio se ejecuta y lo que tiene problema se aparta con dueño, sin detener el resto |
+| Dinero apartado | Pagos que no salieron porque esperan a una persona: comercio bloqueado hoy, bloqueo fallido, doble control o umbral de riesgo. El tablero lo muestra por comercio y motivo |
+| Comercio en riesgo | Comercio que supera los umbrales de contracargos (por día o por ratio en 30 días); señal para que Riesgos lo revise |
+| Estados de una corrida | Cerrada: todo con estado final. Cerrada con incidencias: algo falló y quedó aislado con dueño. Detenida: archivo ilegible o anómalo, Core sin responder o credenciales ausentes |
 | Conciliación | Cruce de cada movimiento del banco contra el Core para decidir liquidar, retener, revisar o nada |
 | Excepción | Movimiento que las reglas no pudieron clasificar; lo resuelve un analista, con sugerencia del asistente |
 | Incidencia | Registro de algo que salió mal (corrida detenida, acción fallida, contracargo sin match) con dueño, estado y antigüedad |
 | Doble control | Aprobación de un supervisor, con nombre registrado, antes de ejecutar una acción |
-| Idempotencia | Repetir una acción no produce efecto adicional: no se libera ni se retiene dos veces |
+| Idempotencia | Repetir una acción no produce efecto adicional: no se libera ni se bloquea dos veces |
 | Libro mayor | Registro propio, de solo inserción, de corridas, decisiones, acciones, controles, aprobaciones, incidencias y sugerencias |
 | Puerto y adaptador | El puerto es la interfaz que el núcleo conoce; el adaptador, la implementación concreta (portal, API, interfaz) que se cambia sin tocar el núcleo |
 | RPA | Automatización que opera una interfaz de usuario como lo haría una persona; útil sin API, frágil ante cambios de pantalla |
@@ -217,8 +219,8 @@ MODO=autonoma make demo          # corrida autónoma
 | G-VOLUMEN | Que el archivo no venga vacío ni con más del triple del promedio histórico | Sí |
 | G-DUPLICADO | Que no se repita una acción ya confirmada en una corrida anterior | Sí |
 | G-UMBRAL | Que una liquidación arriba del umbral pase por doble control | Sí |
-| G-ORDEN | Que ninguna liquidación arranque con una retención sin intentar | Sí |
-| G-CIERRE | Que toda acción termine con estado final consistente | Sí |
+| G-ORDEN | Que ninguna liquidación arranque con un bloqueo sin intentar | Sí |
+| G-CIERRE | Que toda acción termine con estado final consistente; si no, la corrida cierra "con incidencias" | No |
 | G-CONTRATO-PORTAL | Que el portal del banco siga teniendo los elementos que usa el robot | No |
 | G-SOMBRA | Que la coincidencia con el analista supere el umbral antes de cambiar de fase | No |
 | G-LLM-PII | Que el paquete enviado al modelo no contenga datos personales sin tokenizar | No |

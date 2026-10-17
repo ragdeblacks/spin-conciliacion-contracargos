@@ -62,6 +62,7 @@ class Dia:
     tokens: int = 0
     incidencias: int = 0
     incidencias_abiertas: int = 0
+    monto_apartado: int = 0
 
     @property
     def auto_pct(self) -> float | None:
@@ -80,7 +81,7 @@ def recopilar(libro: LibroMayor, desde: date) -> dict[str, Dia]:
         x = dia(c["fecha_operacion"])
         x.corridas += 1
         x.modo = c["modo"]
-        if c["estado"] == "CERRADA":
+        if c["estado"].startswith("CERRADA"):
             x.cerradas += 1
             fin = _local(c["fin"])
             x.hora_cierre = fin.strftime("%H:%M") if fin else None
@@ -114,6 +115,10 @@ def recopilar(libro: LibroMayor, desde: date) -> dict[str, Dia]:
             x.ejecutadas += 1
         elif r["estado_ejecucion"] == "FALLIDA":
             x.fallidas += 1
+        if r["estado_ejecucion"] in ("APARTADA", "PENDIENTE_APROBACION", "FALLIDA") or (
+            a == "EXCEPCION" and r["motivo"] in ("COMERCIO_BLOQUEADO", "COMERCIO_BLOQUEADO_HOY", "COMERCIO_EN_RIESGO")
+        ):
+            x.monto_apartado += r["monto_centavos"]
 
     # tiempo al bloqueo: solo los automáticos; los que pasaron por doble control dependen de una persona
     for r in libro.consultar(
@@ -305,6 +310,7 @@ def _tarjetas(p: Periodo | None) -> str:
         ("Acciones fallidas", str(fall), _semaforo(fall == 0), "objetivo: cero"),
         ("Incidencias abiertas", str(abiertas), _semaforo(abiertas == 0, abiertas <= 2), "pendientes de un responsable"),
         ("Excepciones por revisar", str(p.suma("excepcion") - p.suma("exc_resueltas")), "gris", f"de {p.suma('excepcion')} en el periodo"),
+        ("Dinero apartado", centavos_a_texto(p.suma("monto_apartado")), _semaforo(p.suma("monto_apartado") == 0, True), "espera a una persona para salir"),
     ]
     return (
         "<div class='tarjetas'>"
@@ -385,7 +391,10 @@ def generar_html(libro: LibroMayor, dias_atras: int = 30, hoy: date | None = Non
     incidencias = libro.incidencias(desde=desde.isoformat())
     abiertas = [i for i in incidencias if i["estado"] == "ABIERTA"]
     pendientes = libro.excepciones_pendientes(desde=desde.isoformat())
-    prioridad = {"CONTRACARGO_SIN_MATCH": 0, "COMERCIO_BLOQUEADO": 1, "COMERCIO_EN_RIESGO": 2}
+    prioridad = {"CONTRACARGO_SIN_MATCH": 0, "COMERCIO_BLOQUEADO": 1, "COMERCIO_BLOQUEADO_HOY": 1, "COMERCIO_EN_RIESGO": 2}
+    apartado = libro.dinero_apartado(desde=desde.isoformat())
+    total_apartado = sum(a["monto"] for a in apartado)
+    comercios_apartados = len({a["comercio_id"] for a in apartado})
     pendientes.sort(key=lambda e: (prioridad.get(e["motivo"], 9), -e["monto_centavos"]))
 
     recurrentes = libro.consultar(
@@ -441,6 +450,25 @@ def generar_html(libro: LibroMayor, dias_atras: int = 30, hoy: date | None = Non
         ]
         for e in pendientes[:25]
     ]
+    etiqueta = {
+        "COMERCIO_BLOQUEADO": "comercio bloqueado en el Core",
+        "COMERCIO_BLOQUEADO_HOY": "bloqueado hoy por contracargo",
+        "COMERCIO_EN_RIESGO": "sobre el umbral de riesgo",
+        "APARTADA": "el bloqueo del comercio falló",
+        "PENDIENTE_APROBACION": "espera doble control",
+        "FALLIDA": "acción fallida",
+    }
+    filas_apartado = [
+        [
+            html.escape(a["comercio_id"]),
+            etiqueta.get(a["motivo"], a["motivo"]),
+            str(a["n"]),
+            centavos_a_texto(a["monto"]),
+            html.escape(a["desde"]),
+            html.escape(a["hasta"]),
+        ]
+        for a in apartado[:30]
+    ]
     filas_rec = [
         [html.escape(r["motivo"].replace("_", " ").lower()), html.escape(r["comercio_id"]), str(r["n"]), centavos_a_texto(r["monto"])] for r in recurrentes
     ]
@@ -491,6 +519,8 @@ section.gestion{{margin-top:34px;border-top:2px solid var(--lin);padding-top:10p
 {_tabla(["Severidad", "Fecha", "Tipo", "Qué pasó", "Antigüedad", "Cómo cerrarla"], filas_inc, "No hay incidencias abiertas.")}
 <h3>Resueltas recientemente</h3>
 {_tabla(["Fecha", "Tipo", "Qué pasó", "Quién", "Qué se hizo"], filas_res, "Ninguna resuelta en el periodo.")}
+<h2 style='margin-top:30px'>Dinero apartado <span class='sub'>{centavos_a_texto(total_apartado)} en {comercios_apartados} comercios: cada fila es un problema que, al resolverse, libera ese monto</span></h2>
+{_tabla(["Comercio", "Por qué está apartado", "Movimientos", "Monto", "Desde", "Hasta"], filas_apartado, "No hay dinero apartado.")}
 <h2 style='margin-top:30px'>Excepciones por revisar <span class='sub'>{len(pendientes)} en total, ordenadas por riesgo y monto</span></h2>
 {_tabla(["ID", "Fecha", "Referencia", "Comercio", "Monto", "Motivo", "Causa probable", "Acción sugerida", "Conf."], filas_exc, "Cola vacía.")}
 <h3>Excepciones recurrentes (candidatas a regla nueva)</h3>

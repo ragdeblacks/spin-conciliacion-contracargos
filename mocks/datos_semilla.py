@@ -171,7 +171,13 @@ def generar_dia(fecha: date, semilla: int = 2026, n_ventas: int = 190) -> Dia:
     casos["VENTA_DE_COMERCIO_EN_RIESGO"] = [
         m.referencia for m in movs if m.tipo == "VENTA" and m.comercio_id == comercio_malo and m.referencia in casos.get("NORMAL", [])
     ]
-    casos["NORMAL"] = [r for r in casos["NORMAL"] if r not in casos["VENTA_DE_COMERCIO_EN_RIESGO"]]
+    con_cc = {m.comercio_id for m in movs if m.tipo == "CONTRACARGO" and any(t.referencia == m.referencia for t in txs)}
+    casos["VENTA_DE_COMERCIO_CON_CONTRACARGO"] = [
+        m.referencia
+        for m in movs
+        if m.tipo == "VENTA" and m.comercio_id in con_cc and m.comercio_id != comercio_malo and m.referencia in casos.get("NORMAL", [])
+    ]
+    casos["NORMAL"] = [r for r in casos["NORMAL"] if r not in casos["VENTA_DE_COMERCIO_EN_RIESGO"] + casos["VENTA_DE_COMERCIO_CON_CONTRACARGO"]]
     return Dia(fecha, txs, movs, bloqueados, casos)
 
 

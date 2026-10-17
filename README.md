@@ -6,11 +6,12 @@ conciliación matutina entre los movimientos del banco adquirente y el Core de N
 
 - **Ingesta** del CSV del portal legacy del banco por RPA (Playwright), por API cuando el banco la libere, o por archivo manual como respaldo.
 - **Conciliación determinista** con reglas explicables (cada decisión lleva la regla que la produjo).
-- **Ejecución idempotente**: por cada contracargo se retiene el importe en disputa en el saldo del comercio (hoy por la UI del Core, mañana por API) y después se liberan las liquidaciones (API REST con clave de idempotencia). El comercio sigue operando; suspenderlo es una decisión de Riesgos que el sistema solo propone cuando supera umbrales configurables (contracargos por día o ratio en 30 días, al estilo de Visa VAMP y Mastercard ECM).
+- **Los dos escenarios del caso, tal cual**: si los datos coinciden, el sistema llama la API REST interna de NetPay para liberar la liquidación (con clave de idempotencia); si el banco reporta un contracargo, bloquea el saldo del comercio por la UI del Core con un robot que deja captura de evidencia.
+- **Procesamiento por excepciones**: lo que tiene problema se aparta con dueño (comercio bloqueado hoy, bloqueo fallido, doble control, umbral de riesgo) y todo lo demás avanza. La corrida termina `CERRADA`, `CERRADA_CON_INCIDENCIAS` o `DETENIDA` (solo por archivo ilegible/anómalo, Core caído o credenciales ausentes).
 - **Doble control** para montos altos y acumulación anómala; **tres modos** de adopción: sombra, asistida, autónoma.
 - **Triaje de excepciones asistido por IA**, fuera del camino crítico, con tokenización de datos sensibles, presupuesto y fallback determinista. Agnóstico al proveedor (Anthropic, OpenAI-compatible o ninguno).
 - **Libro mayor** append-only, **gates** críticos y no críticos, evidencia en capturas, reporte matutino.
-- **Gestión medible**: cada falla abre una incidencia con dueño; cada excepción se cierra registrando la decisión del analista; `conciliador tablero` genera una página con semáforos, pestañas día/semana/mes, incidencias, cola de excepciones y patrones recurrentes ([ver tablero de demostración](docs/tablero-demo.html)).
+- **Gestión medible**: cada falla abre una incidencia con dueño; cada excepción se cierra registrando la decisión del analista; `conciliador tablero` genera una página con semáforos, pestañas día/semana/mes, incidencias, dinero apartado por comercio y motivo, cola de excepciones y patrones recurrentes ([ver tablero de demostración](docs/tablero-demo.html)).
 - **Observabilidad** detrás de un puerto de notificación: Slack, Telegram y correo (solo alertas), latido a un monitor tipo dead man's switch (Healthchecks/Cronitor) y Sentry opcional para errores no controlados. Cada canal se activa con su variable de entorno.
 
 El documento de la solución (discovery, arquitectura, seguridad, IA, delivery y plan por fases) está en
@@ -66,7 +67,7 @@ scripts/poblar_demo.py  30 días de operación simulada (sombra → asistida →
 mocks/          portal del banco (con su API "futura") y Core NetPay (API + UI de bloqueo), FastAPI
 contexto/       contexto de negocio fijo que recibe el asistente (versionado, revisado con Operaciones)
 prompts/        prompts versionados
-tests/          40 pruebas: reglas, gates, privacidad, orquestador con fakes, integración HTTP real y RPA real
+tests/          41 pruebas: reglas, gates, privacidad, orquestador con fakes, integración HTTP real y RPA real
 ```
 
 ## Configuración

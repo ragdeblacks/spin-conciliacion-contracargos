@@ -154,13 +154,17 @@ class LibroMayor:
         return [dict(f) for f in self.con.execute("SELECT id, fecha_operacion, modo, fuente, inicio, fin, estado FROM corridas ORDER BY id")]
 
     def promedio_movimientos(self, ultimas: int = 10) -> float | None:
-        filas = self.con.execute("SELECT resumen FROM corridas WHERE estado='CERRADA' AND resumen IS NOT NULL ORDER BY id DESC LIMIT ?", (ultimas,)).fetchall()
+        filas = self.con.execute(
+            "SELECT resumen FROM corridas WHERE estado LIKE 'CERRADA%' AND resumen IS NOT NULL ORDER BY id DESC LIMIT ?", (ultimas,)
+        ).fetchall()
         totales = [json.loads(f["resumen"]).get("TOTAL", 0) for f in filas]
         totales = [t for t in totales if t]
         return sum(totales) / len(totales) if totales else None
 
     def tasa_excepciones_historica(self, ultimas: int = 10) -> float | None:
-        filas = self.con.execute("SELECT resumen FROM corridas WHERE estado='CERRADA' AND resumen IS NOT NULL ORDER BY id DESC LIMIT ?", (ultimas,)).fetchall()
+        filas = self.con.execute(
+            "SELECT resumen FROM corridas WHERE estado LIKE 'CERRADA%' AND resumen IS NOT NULL ORDER BY id DESC LIMIT ?", (ultimas,)
+        ).fetchall()
         tasas = []
         for f in filas:
             r = json.loads(f["resumen"])
@@ -344,10 +348,26 @@ class LibroMayor:
                       SUM(CASE WHEN d.tipo='CONTRACARGO' THEN 1 ELSE 0 END) cc,
                       SUM(CASE WHEN d.tipo='VENTA' THEN 1 ELSE 0 END) ventas
                FROM decisiones d JOIN corridas c ON c.id=d.corrida_id
-               WHERE c.fecha_operacion>=? AND c.estado='CERRADA' GROUP BY d.comercio_id""",
+               WHERE c.fecha_operacion>=? AND c.estado LIKE 'CERRADA%' GROUP BY d.comercio_id""",
             (desde,),
         ).fetchall()
         return {f["comercio_id"]: (int(f["cc"]), int(f["ventas"])) for f in filas}
+
+    def dinero_apartado(self, desde: str | None = None) -> list[dict]:
+        """Pagos que no salieron y esperan a una persona, agrupados por comercio: por qué, cuánto y desde cuándo."""
+        sql = """SELECT d.comercio_id,
+                        CASE WHEN d.accion='EXCEPCION' THEN d.motivo ELSE d.estado_ejecucion END motivo,
+                        COUNT(*) n, SUM(d.monto_centavos) monto, MIN(c.fecha_operacion) desde, MAX(c.fecha_operacion) hasta
+                 FROM decisiones d JOIN corridas c ON c.id=d.corrida_id
+                 WHERE ((d.accion='EXCEPCION' AND d.motivo IN ('COMERCIO_BLOQUEADO','COMERCIO_BLOQUEADO_HOY','COMERCIO_EN_RIESGO')
+                         AND d.id NOT IN (SELECT decision_id FROM resoluciones))
+                        OR d.estado_ejecucion IN ('APARTADA','PENDIENTE_APROBACION','FALLIDA'))"""
+        args: list = []
+        if desde:
+            sql += " AND c.fecha_operacion>=?"
+            args.append(desde)
+        sql += " GROUP BY d.comercio_id, motivo ORDER BY monto DESC"
+        return [dict(f) for f in self.con.execute(sql, args)]
 
     def consultar(self, sql: str, args: tuple = ()) -> list[dict]:
         return [dict(f) for f in self.con.execute(sql, args)]

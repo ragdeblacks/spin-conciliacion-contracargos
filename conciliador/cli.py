@@ -111,7 +111,7 @@ def main(argv: list[str] | None = None) -> int:
             fallidos = [g for g in res.gates if not g.ok]
             for g in fallidos:
                 print(f"  ❌ {g.gate}: {g.detalle}")
-        return 0 if res.estado == "CERRADA" else 2
+        return {"CERRADA": 0, "CERRADA_CON_INCIDENCIAS": 1}.get(res.estado, 2)  # 1: cerró pero hay incidencias que atender
 
     if args.comando == "aprobar":
         decisiones = orq.aprobar_y_ejecutar(args.corrida, args.aprobador, args.decision)

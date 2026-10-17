@@ -78,6 +78,12 @@ def reporte_markdown(libro: LibroMayor, corrida_id: int) -> str:
                 f"{s.get('causa_probable', '-')} | {s.get('accion_sugerida', '-')} | {s.get('confianza', 0):.0%} |"
             )
 
+    apartado = [a for a in libro.dinero_apartado() if any(d["comercio_id"] == a["comercio_id"] for d in decisiones)]
+    if apartado:
+        lineas += ["", "## Dinero apartado por comercio (espera a una persona)", "", "| Comercio | Por qué | Movs | Monto |", "|---|---|---:|---:|"]
+        for a in apartado[:20]:
+            lineas.append(f"| {a['comercio_id']} | {a['motivo']} | {a['n']} | {centavos_a_texto(a['monto'])} |")
+
     fallidas = [d for d in decisiones if d["estado_ejecucion"] == "FALLIDA"]
     if fallidas:
         lineas += ["", "## ⚠ Acciones fallidas (atender antes del corte)", ""]

@@ -26,7 +26,7 @@ class ParametrosConciliacion:
     tolerancia_dias: int = 1  # desfase de fecha aceptado (corte nocturno)
     ventana_candidatos_dias: int = 3  # para buscar parecidos cuando no hay match
     umbral_aprobacion_centavos: int = 50_000_00  # $50,000.00: liberar más que esto exige doble control
-    # Riesgo por comercio, inspirado en los programas de monitoreo de las redes (Visa VAMP 1.5 %; Mastercard ECM 1.5 % y 100+):
+    # Riesgo por comercio (umbrales que se acuerdan con Riesgos):
     # si el comercio supera cualquiera de estos umbrales, sus ventas pasan a revisión y Riesgos decide si suspende.
     max_contracargos_comercio_dia: int = 3
     ratio_contracargos_comercio: float = 0.015  # contracargos / ventas del comercio en la ventana histórica
@@ -82,6 +82,13 @@ def conciliar(
 
     repetidos = Counter((m.referencia, m.tipo) for m in movimientos)
     en_riesgo = comercios_en_riesgo(movimientos, por_referencia, params, historial_comercios)
+    # escenario B tal como opera hoy: el contracargo bloquea el saldo del comercio, así que sus ventas del día
+    # no se liberan solas; quedan apartadas para que una persona decida. Los demás comercios avanzan.
+    bloqueados_hoy = {
+        m.comercio_id
+        for m in movimientos
+        if m.tipo == TipoMovimiento.CONTRACARGO and m.referencia in por_referencia and por_referencia[m.referencia].estado != EstadoTransaccion.BLOQUEADA
+    }
     vistos: set[tuple[str, TipoMovimiento]] = set()
     decisiones: list[Decision] = []
 
@@ -104,8 +111,11 @@ def conciliar(
             continue
 
         if mov.tipo == TipoMovimiento.CONTRACARGO:
-            if t.estado == EstadoTransaccion.BLOQUEADA:  # la retención ya se aplicó en una corrida anterior o a mano
-                decisiones.append(Decision(mov, Accion.YA_PROCESADO, Motivo.RETENCION_YA_APLICADA, transaccion=t, regla="R3-ya-retenida"))
+            if t.estado == EstadoTransaccion.BLOQUEADA:  # el bloqueo por esta disputa ya se aplicó (corrida anterior o a mano)
+                decisiones.append(Decision(mov, Accion.YA_PROCESADO, Motivo.BLOQUEO_YA_APLICADO, transaccion=t, regla="R3-ya-bloqueada"))
+                continue
+            if t.comercio_bloqueado:  # el comercio ya está bloqueado en el Core: no hay nada más que bloquear
+                decisiones.append(Decision(mov, Accion.YA_PROCESADO, Motivo.COMERCIO_YA_BLOQUEADO, transaccion=t, regla="R3-comercio-bloqueado"))
                 continue
             motivo = Motivo.CONTRACARGO_CON_MATCH
             nota = ""
@@ -116,8 +126,8 @@ def conciliar(
                 motivo = Motivo.CONTRACARGO_PARCIAL
                 nota = f"Contracargo por {mov.monto_centavos} sobre venta de {t.monto_centavos}."
             if mov.comercio_id in en_riesgo:
-                nota = (nota + " " if nota else "") + "Comercio sobre el umbral de riesgo: Riesgos decide si suspende."
-            # retener el importe en disputa es protector y reversible: se ejecuta sin doble control
+                nota = (nota + " " if nota else "") + "Comercio sobre el umbral de riesgo: revisar con Riesgos."
+            # bloquear el saldo del comercio (escenario B) es protector: se ejecuta sin doble control
             decisiones.append(Decision(mov, Accion.BLOQUEAR, motivo, transaccion=t, regla="R4-contracargo", nota=nota))
             continue
 
@@ -161,6 +171,18 @@ def conciliar(
                 )
             )
             continue
+        if mov.comercio_id in bloqueados_hoy:
+            decisiones.append(
+                Decision(
+                    mov,
+                    Accion.EXCEPCION,
+                    Motivo.COMERCIO_BLOQUEADO_HOY,
+                    transaccion=t,
+                    regla="R8a-bloqueado-hoy",
+                    nota="El comercio queda bloqueado hoy por contracargo: su liquidación la decide una persona.",
+                )
+            )
+            continue
         if mov.comercio_id in en_riesgo:
             decisiones.append(
                 Decision(
@@ -169,7 +191,7 @@ def conciliar(
                     Motivo.COMERCIO_EN_RIESGO,
                     transaccion=t,
                     regla="R8b-comercio-en-riesgo",
-                    nota="El comercio supera el umbral de contracargos: Riesgos decide si libera, retiene o suspende.",
+                    nota="El comercio supera el umbral de contracargos: Riesgos decide si se libera o se mantiene bloqueado.",
                 )
             )
             continue
