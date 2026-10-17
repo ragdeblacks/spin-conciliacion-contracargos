@@ -53,6 +53,9 @@ img { max-width: 100%; }
 figure { margin: 8pt 0 12pt; text-align: center; }
 figcaption { font-size: 9pt; color: #6b7280; margin-top: 3pt; }
 .evidencia { border: 1px solid #d1d5db; }
+.glosario table { font-size: 8.6pt; }
+.glosario th, .glosario td { padding: 3pt 5pt; }
+.glosario h2 { margin-top: 14pt; }
 """
 html = f"<!doctype html><html lang='es'><head><meta charset='utf-8'><title>Caso de negocio Spin — Conciliación automática</title><style>{css}</style></head><body>{cuerpo}</body></html>"
 salida_html = RAIZ / "caso-spin-fde.html"
