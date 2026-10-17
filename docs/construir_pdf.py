@@ -37,7 +37,7 @@ pre code { background: none; padding: 0; }
 blockquote { border-left: 3px solid #a5b4fc; margin: 8pt 0; padding: 4pt 10pt; background: #f8fafc; color: #1f2937; }
 img { max-width: 100%; }
 .salto { page-break-after: always; }
-.portada { text-align: left; padding-top: 60mm; }
+.portada { text-align: left; padding-top: 70mm; }
 .portada .sup { color: #6b7280; font-size: 11pt; letter-spacing: 1px; text-transform: uppercase; }
 .portada h1 { font-size: 28pt; margin: 10pt 0 6pt; }
 .portada .sub { font-size: 15pt; color: #312e81; margin-bottom: 30pt; }
