@@ -10,6 +10,7 @@ conciliación matutina entre los movimientos del banco adquirente y el Core de N
 - **Doble control** para montos altos y acumulación anómala; **tres modos** de adopción: sombra, asistida, autónoma.
 - **Triaje de excepciones asistido por IA**, fuera del camino crítico, con tokenización de datos sensibles, presupuesto y fallback determinista. Agnóstico al proveedor (Anthropic, OpenAI-compatible o ninguno).
 - **Libro mayor** append-only, **gates** críticos y no críticos, evidencia en capturas, reporte matutino.
+- **Gestión medible**: cada falla abre una incidencia con dueño; cada excepción se cierra registrando la decisión del analista; `conciliador tablero` genera una página con semáforos, pestañas día/semana/mes, incidencias, cola de excepciones y patrones recurrentes ([ver tablero de demostración](docs/tablero-demo.html)).
 - **Observabilidad** detrás de un puerto de notificación: Slack, Telegram y correo (solo alertas), latido a un monitor tipo dead man's switch (Healthchecks/Cronitor) y Sentry opcional para errores no controlados. Cada canal se activa con su variable de entorno.
 
 El documento de la solución (discovery, arquitectura, seguridad, IA, delivery y plan por fases) está en
@@ -38,6 +39,9 @@ Comandos del conciliador (`uv run conciliador --help`):
 | `reporte --corrida 2` | Reporte Markdown para Operaciones: resumen, pendientes, cola de excepciones con sugerencia, gates, evidencia. |
 | `contrato-portal` | Gate G-CONTRATO-PORTAL: ¿los selectores del portal siguen vivos? |
 | `corridas` | Historial. |
+| `tablero --dias 30 --salida tablero.html [--json metricas.json]` | Tablero de gestión en HTML y métricas diarias en JSON para Grafana o Datadog. |
+| `incidencias [--abiertas]` | Lista de incidencias con severidad y estado. |
+| `resolver --incidencia 4 --por "Ana López"` / `resolver --excepcion 215 --accion ESCALAR_AL_BANCO --por "Ana López"` | Cierra una incidencia o registra la decisión del analista sobre una excepción. |
 
 Datos de prueba: `mocks/datos_semilla.py` genera, de forma determinista por fecha, 190 transacciones en el Core
 y 186 movimientos del banco con los casos feos incluidos (duplicados, montos distintos, sin match, contracargo
@@ -56,11 +60,13 @@ conciliador/
   triaje.py       arma el paquete por excepción, aplica gates del LLM, registra la sugerencia
   orquestador.py  pipeline diario, modos, ejecución ordenada, aprobación, comparación en sombra
   observabilidad.py  Sentry opcional, latido al monitor de cron, notificadores Telegram/correo/compuesto
+  tablero.py      tablero de gestión (HTML estático + JSON) desde el libro mayor
   reporte.py / cli.py
+scripts/poblar_demo.py  30 días de operación simulada (sombra → asistida → autónoma, con incidencias)
 mocks/          portal del banco (con su API "futura") y Core NetPay (API + UI de bloqueo), FastAPI
 contexto/       contexto de negocio fijo que recibe el asistente (versionado, revisado con Operaciones)
 prompts/        prompts versionados
-tests/          35 pruebas: reglas, gates, privacidad, orquestador con fakes, integración HTTP real y RPA real
+tests/          39 pruebas: reglas, gates, privacidad, orquestador con fakes, integración HTTP real y RPA real
 ```
 
 ## Configuración

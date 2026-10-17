@@ -44,3 +44,5 @@ select = ["E", "F", "I", "B", "UP"]
 "mocks/**" = ["B008"]   # FastAPI usa Query()/Header() como defaults a propósito
 "tests/**" = ["E501"]
 "docs/**" = ["E501"]
+"scripts/**" = ["E501"]
+"conciliador/tablero.py" = ["E501"]   # CSS y SVG inline

@@ -6,5 +6,5 @@ __pycache__/
 datos/*.sqlite
 evidencia/
 .env
-docs/*.html
+docs/caso-spin-fde.html
 dist/

@@ -56,6 +56,24 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--salida")
 
     sub.add_parser("corridas", help="lista corridas")
+
+    t = sub.add_parser("tablero", help="tablero de gestión en HTML (día, semana, mes, incidencias, excepciones)")
+    t.add_argument("--dias", type=int, default=30)
+    t.add_argument("--salida", default="tablero.html")
+    t.add_argument("--json", help="además exporta las métricas diarias a este archivo JSON")
+
+    i = sub.add_parser("incidencias", help="lista incidencias")
+    i.add_argument("--abiertas", action="store_true")
+
+    rs = sub.add_parser("resolver", help="cierra una incidencia o registra la decisión del analista sobre una excepción")
+    rs.add_argument("--incidencia", type=int)
+    rs.add_argument("--excepcion", type=int, help="id de la decisión")
+    rs.add_argument(
+        "--accion",
+        help="qué hizo el analista (LIQUIDAR_MANUAL, BLOQUEAR_MANUAL, ESPERAR_SIGUIENTE_CORTE, ESCALAR_AL_BANCO, IGNORAR_DUPLICADO, REVISAR_CON_COMERCIO)",
+    )
+    rs.add_argument("--por", required=True)
+    rs.add_argument("--nota", default="")
     sub.add_parser("contrato-portal", help="G-CONTRATO-PORTAL: ¿los selectores siguen vivos?")
 
     args = p.parse_args(argv)
@@ -123,6 +141,38 @@ def main(argv: list[str] | None = None) -> int:
         for c in libro.corridas():
             print(f"  {c['id']:>4} {c['fecha_operacion']} {c['modo']:<9} {c['fuente']:<11} {c['estado']:<9} {c['inicio']} → {c['fin'] or '-'}")
         return 0
+
+    if args.comando == "tablero":
+        from .tablero import exportar_json, generar_html
+
+        with open(args.salida, "w", encoding="utf-8") as f:
+            f.write(generar_html(libro, args.dias))
+        print(f"tablero escrito en {args.salida}")
+        if args.json:
+            with open(args.json, "w", encoding="utf-8") as f:
+                f.write(exportar_json(libro, args.dias))
+            print(f"métricas en {args.json}")
+        return 0
+
+    if args.comando == "incidencias":
+        for i in libro.incidencias(solo_abiertas=args.abiertas):
+            print(f"  {i['id']:>4} {i['estado']:<8} {i['severidad']:<8} {i['fecha_operacion']} {i['tipo']:<22} {i['descripcion'][:70]}")
+        return 0
+
+    if args.comando == "resolver":
+        from .adaptadores.llm import ACCIONES_SUGERIBLES
+
+        if args.incidencia:
+            libro.resolver_incidencia(args.incidencia, args.por, args.nota)
+            print(f"incidencia {args.incidencia} resuelta por {args.por}")
+            return 0
+        if args.excepcion:
+            if args.accion not in ACCIONES_SUGERIBLES:
+                p.error(f"--accion debe ser una de {ACCIONES_SUGERIBLES}")
+            r = libro.resolver_excepcion(args.excepcion, args.accion, args.por, args.nota)
+            print(f"excepción {args.excepcion}: {args.accion} por {args.por}" + (" (coincide con la sugerencia)" if r["siguio_sugerencia"] else ""))
+            return 0
+        p.error("indica --incidencia o --excepcion")
 
     if args.comando == "contrato-portal":
         fuente = orq.ad.fuente_banco

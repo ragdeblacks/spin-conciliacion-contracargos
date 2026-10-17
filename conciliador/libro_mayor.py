@@ -71,6 +71,29 @@ CREATE TABLE IF NOT EXISTS gates (
   detalle TEXT,
   momento TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS incidencias (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  corrida_id INTEGER,
+  fecha_operacion TEXT NOT NULL,
+  tipo TEXT NOT NULL,            -- CORRIDA_DETENIDA | ACCION_FALLIDA | GATE | CONTRACARGO_SIN_MATCH | PORTAL
+  severidad TEXT NOT NULL,       -- critica | alta | media
+  descripcion TEXT NOT NULL,
+  estado TEXT NOT NULL,          -- ABIERTA | RESUELTA
+  abierta TEXT NOT NULL,
+  resuelta TEXT,
+  resuelta_por TEXT,
+  nota TEXT
+);
+CREATE TABLE IF NOT EXISTS resoluciones (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  decision_id INTEGER NOT NULL,
+  corrida_id INTEGER NOT NULL,
+  accion TEXT NOT NULL,          -- lo que hizo el analista (catálogo de triaje)
+  analista TEXT NOT NULL,
+  siguio_sugerencia INTEGER,
+  nota TEXT,
+  momento TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS sugerencias (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   corrida_id INTEGER NOT NULL,
@@ -257,6 +280,65 @@ class LibroMayor:
 
     def sugerencias_de(self, corrida_id: int) -> list[dict]:
         return [dict(f) for f in self.con.execute("SELECT * FROM sugerencias WHERE corrida_id=? ORDER BY id", (corrida_id,))]
+
+    # --- incidencias y resoluciones (gestión humana) ----------------------
+    def abrir_incidencia(self, corrida_id: int | None, fecha_operacion: str, tipo: str, severidad: str, descripcion: str) -> int:
+        ya = self.con.execute(
+            "SELECT id FROM incidencias WHERE corrida_id IS ? AND tipo=? AND descripcion=? AND estado='ABIERTA'",
+            (corrida_id, tipo, descripcion),
+        ).fetchone()
+        if ya:
+            return int(ya["id"])
+        cur = self.con.execute(
+            "INSERT INTO incidencias (corrida_id, fecha_operacion, tipo, severidad, descripcion, estado, abierta) VALUES (?,?,?,?,?,'ABIERTA',?)",
+            (corrida_id, fecha_operacion, tipo, severidad, descripcion, _ahora()),
+        )
+        self.con.commit()
+        return int(cur.lastrowid)
+
+    def resolver_incidencia(self, incidencia_id: int, por: str, nota: str = "") -> None:
+        self.con.execute("UPDATE incidencias SET estado='RESUELTA', resuelta=?, resuelta_por=?, nota=? WHERE id=?", (_ahora(), por, nota, incidencia_id))
+        self.con.commit()
+
+    def incidencias(self, solo_abiertas: bool = False, desde: str | None = None) -> list[dict]:
+        sql, args = "SELECT * FROM incidencias WHERE 1=1", []
+        if solo_abiertas:
+            sql += " AND estado='ABIERTA'"
+        if desde:
+            sql += " AND fecha_operacion>=?"
+            args.append(desde)
+        sql += " ORDER BY CASE severidad WHEN 'critica' THEN 0 WHEN 'alta' THEN 1 ELSE 2 END, abierta DESC"
+        return [dict(f) for f in self.con.execute(sql, args)]
+
+    def resolver_excepcion(self, decision_id: int, accion: str, analista: str, nota: str = "") -> dict:
+        d = self.con.execute("SELECT * FROM decisiones WHERE id=?", (decision_id,)).fetchone()
+        if not d:
+            raise KeyError(f"decisión {decision_id} no existe")
+        s = self.con.execute("SELECT * FROM sugerencias WHERE decision_id=? ORDER BY id DESC LIMIT 1", (decision_id,)).fetchone()
+        siguio = int(bool(s and s["accion_sugerida"] == accion)) if s else None
+        self.con.execute(
+            "INSERT INTO resoluciones (decision_id, corrida_id, accion, analista, siguio_sugerencia, nota, momento) VALUES (?,?,?,?,?,?,?)",
+            (decision_id, d["corrida_id"], accion, analista, siguio, nota, _ahora()),
+        )
+        if s:
+            self.con.execute("UPDATE sugerencias SET decision_humana=? WHERE id=?", (accion, s["id"]))
+        self.con.commit()
+        return {"decision_id": decision_id, "accion": accion, "siguio_sugerencia": siguio}
+
+    def excepciones_pendientes(self, desde: str | None = None) -> list[dict]:
+        sql = """SELECT d.*, c.fecha_operacion, s.causa_probable, s.accion_sugerida, s.confianza
+                 FROM decisiones d JOIN corridas c ON c.id=d.corrida_id
+                 LEFT JOIN sugerencias s ON s.decision_id=d.id
+                 WHERE d.accion='EXCEPCION' AND d.id NOT IN (SELECT decision_id FROM resoluciones)"""
+        args = []
+        if desde:
+            sql += " AND c.fecha_operacion>=?"
+            args.append(desde)
+        sql += " ORDER BY c.fecha_operacion, d.id"
+        return [dict(f) for f in self.con.execute(sql, args)]
+
+    def consultar(self, sql: str, args: tuple = ()) -> list[dict]:
+        return [dict(f) for f in self.con.execute(sql, args)]
 
     def tokens_llm_hoy(self) -> int:
         hoy = date.today().isoformat()

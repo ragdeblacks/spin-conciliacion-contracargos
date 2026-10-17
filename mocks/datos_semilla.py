@@ -10,7 +10,7 @@ import random
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 
-COMERCIOS = [f"COM-{i:04d}" for i in range(1, 41)]
+COMERCIOS = [f"COM-{i:04d}" for i in range(1, 161)]
 
 
 @dataclass
@@ -134,7 +134,7 @@ def generar_dia(fecha: date, semilla: int = 2026, n_ventas: int = 190) -> Dia:
     marcar("MONEDA", t.referencia)
     # 1 venta de comercio bloqueado
     t = siguiente()
-    t.comercio_id = "COM-0041"
+    t.comercio_id = "COM-0999"
     bloqueados = {t.comercio_id}
     movs.append(mov(t))
     marcar("COMERCIO_BLOQUEADO", t.referencia)

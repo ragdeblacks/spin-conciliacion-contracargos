@@ -1,4 +1,4 @@
-.PHONY: instalar test test-e2e lint mocks demo reporte docker-demo limpiar
+.PHONY: instalar test test-e2e lint mocks demo reporte docker-demo tablero limpiar
 
 instalar:          ## dependencias + Chromium de Playwright
 	uv sync && uv run playwright install chromium
@@ -27,6 +27,10 @@ reporte:
 docker-demo:       ## lo mismo pero todo en contenedores
 	docker compose up -d banco-portal core-netpay
 	docker compose run --rm conciliador correr --fecha $(FECHA) --modo $${MODO:-sombra}
+
+tablero:           ## 30 días de operación simulada y el tablero de gestión (docs/tablero-demo.html)
+	uv run python scripts/poblar_demo.py
+	LIBRO_MAYOR_RUTA=datos/libro_mayor_demo.sqlite CORE_API_TOKEN=demo uv run conciliador tablero --dias 30 --salida docs/tablero-demo.html --json docs/metricas-demo.json
 
 limpiar:
 	rm -rf datos/*.sqlite evidencia/*

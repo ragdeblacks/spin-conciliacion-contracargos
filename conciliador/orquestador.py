@@ -129,11 +129,28 @@ class Orquestador:
             log.exception("error no controlado")
             self.ad.notificador.enviar(f"Conciliación {fecha_operacion} ERROR", f"{type(e).__name__}: {e}", "critico")
         self.libro.cerrar_corrida(corrida_id, estado, res)
+        self._abrir_incidencias(corrida_id, fecha_operacion, estado, decisiones, acumulado)
         latido(self.cfg.url_latido, estado == "CERRADA", corrida_id)
         duracion = time.monotonic() - inicio
         if estado == "CERRADA":
             self._notificar_resumen(fecha_operacion, res, decisiones, duracion)
         return ResultadoCorrida(corrida_id, estado, decisiones, acumulado, res, duracion)
+
+    def _abrir_incidencias(self, corrida_id: int, fecha: date, estado: str, decisiones: list[Decision], gates_evaluados: list[ResultadoGate]) -> None:
+        """Todo lo que salió mal queda como incidencia con dueño pendiente, para la gestión del día siguiente."""
+        f = fecha.isoformat()
+        if estado != "CERRADA":
+            ultimo = next((g for g in reversed(gates_evaluados) if not g.ok and g.critico), None)
+            desc = f"{ultimo.gate}: {ultimo.detalle}" if ultimo else "error no controlado"
+            self.libro.abrir_incidencia(corrida_id, f, "CORRIDA_DETENIDA", "critica", desc)
+        for d in decisiones:
+            if d.estado_ejecucion == EstadoEjecucion.FALLIDA:
+                self.libro.abrir_incidencia(corrida_id, f, "ACCION_FALLIDA", "critica", f"{d.accion.value} {d.movimiento.referencia} no se pudo ejecutar")
+            elif d.accion == Accion.EXCEPCION and d.motivo.value == "CONTRACARGO_SIN_MATCH":
+                self.libro.abrir_incidencia(corrida_id, f, "CONTRACARGO_SIN_MATCH", "alta", f"contracargo {d.movimiento.referencia} sin venta en el Core")
+        for g in gates_evaluados:
+            if not g.ok and not g.critico and g.gate in ("G-DERIVA", "G-SOMBRA", "G-CONTRATO-PORTAL"):
+                self.libro.abrir_incidencia(corrida_id, f, "GATE", "media", f"{g.gate}: {g.detalle}")
 
     def _asignar_estado_inicial(self, decisiones: list[Decision]) -> None:
         for d in decisiones:

@@ -95,6 +95,13 @@ Un pipeline que corre en mi laptop no resuelve nada a las cinco de la mañana. E
 | El modelo de IA no responde | Usa la respuesta determinista | Nada |
 | Hay que parar todo | Cambia a modo sombra o se suspende la tarea | Un comando del supervisor, sin despliegue |
 
+**Cómo se ve la gestión.** Todo lo que el pipeline decide, ejecuta, detiene o sugiere queda en el libro mayor con su marca de tiempo, y de ahí sale un tablero para el líder de Operaciones: semáforos contra objetivo, pestañas por día, semana y mes, la lista de incidencias abiertas con antigüedad y quién la cerró, la cola de excepciones ordenada por riesgo y monto, y las excepciones que se repiten en un mismo comercio, que son las candidatas a convertirse en regla. Cada falla (corrida detenida, acción fallida, contracargo sin match, gate en rojo) abre una incidencia que alguien tiene que cerrar con su nombre y una nota; cada excepción se cierra registrando qué decidió el analista, lo que permite medir si la sugerencia de la IA le sirvió y cuánto tardó. En el prototipo el tablero es una página que se genera con un comando; en producción las mismas consultas alimentan Grafana o Datadog.
+
+<figure>
+<img src="img/tablero.png" alt="Tablero de gestión" class="evidencia" style="max-width:78%">
+<figcaption>Tablero generado desde el libro mayor con 30 días simulados (semáforos, series por día y detalle; más abajo incidencias y excepciones).</figcaption>
+</figure>
+
 **Riesgos que veo.** Que las reglas del analista sean más complejas de lo que parecen; por eso el discovery es con el analista y la fase sombra dura tres semanas. Que el Core rechace acciones por reglas internas que nadie documentó; ya pasó en el prototipo y cada rechazo se vuelve una regla explícita. Que Operaciones no confíe en el sistema; la comparación visible en sombra y la última palabra humana en asistida existen para eso.
 
 ## 4. La evidencia
@@ -122,7 +129,7 @@ El modelo de referencia es Claude Sonnet 5.5; con cien excepciones diarias cuest
 
 ### El prototipo
 
-El repositorio contiene el portal del banco y el Core de NetPay simulados (incluida la API futura del banco, la API de bloqueo detrás de una bandera y un modo que imita el cambio de portal), el conciliador completo con los adaptadores descritos, datos de prueba con los casos incómodos (duplicados, montos distintos, contracargos sobre ventas ya liquidadas, acumulación en un mismo comercio, monto alto, cambio de esquema), 35 pruebas automatizadas, Docker Compose y el pipeline de integración continua.
+El repositorio contiene el portal del banco y el Core de NetPay simulados (incluida la API futura del banco, la API de bloqueo detrás de una bandera y un modo que imita el cambio de portal), el conciliador completo con los adaptadores descritos, datos de prueba con los casos incómodos (duplicados, montos distintos, contracargos sobre ventas ya liquidadas, acumulación en un mismo comercio, monto alto, cambio de esquema), 39 pruebas automatizadas, Docker Compose y el pipeline de integración continua.
 
 | Corrida real contra los servicios simulados | Resultado |
 |---|---|
@@ -136,5 +143,5 @@ Lo que el prototipo todavía no cubre: corre contra servicios simulados, el libr
 make instalar && make mocks      # dependencias, navegador y servicios simulados
 make demo                        # corrida en modo sombra
 MODO=autonoma make demo          # corrida autónoma
-make docker-demo                 # lo mismo, todo en contenedores
+make tablero                     # 30 días simulados y el tablero de gestión en docs/tablero-demo.html
 ```
