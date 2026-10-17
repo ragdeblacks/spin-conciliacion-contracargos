@@ -1,5 +1,5 @@
 <div class="portada" markdown="1">
-<div class="sup">Spin by OXXO · Caso de negocio · Forward Deployed Engineer</div>
+<div class="sup">Spin · Caso de negocio</div>
 
 # Operación Escaldada
 
