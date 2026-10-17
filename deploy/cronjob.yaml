@@ -1,0 +1,71 @@
+# Ejecución programada en Kubernetes: corrida diaria a las 05:00 (hora de la Ciudad de México) y reintento a las 05:20.
+# Los secretos vienen de un Secret (idealmente sincronizado desde Vault / AWS Secrets Manager con External Secrets).
+apiVersion: v1
+kind: Secret
+metadata: {name: conciliador-secretos}
+type: Opaque
+stringData:
+  BANCO_PORTAL_USUARIO: ""      # usuario de servicio del portal del banco
+  BANCO_PORTAL_CLAVE: ""
+  CORE_API_TOKEN: ""
+  CORE_UI_USUARIO: ""           # usuario de servicio de la UI del Core (distinto a los analistas)
+  CORE_UI_CLAVE: ""
+  SLACK_WEBHOOK_URL: ""
+  LATIDO_URL: ""                # https://hc-ping.com/<uuid>  (dead man's switch)
+  # ANTHROPIC_API_KEY: ""       # cuando LLM_PROVEEDOR=anthropic
+  # SENTRY_DSN: ""
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: conciliador-config}
+data:
+  CONCILIADOR_MODO: "sombra"            # sombra → asistida → autonoma, según la fase
+  FUENTE_BANCO: "portal_rpa"            # api cuando el banco libere su API
+  BLOQUEADOR_CORE: "ui_rpa"             # api cuando el Core exponga bloqueo por API
+  LLM_PROVEEDOR: "nulo"                 # anthropic | openai_compatible
+  LLM_MODELO: "claude-sonnet-5-5"
+  BANCO_PORTAL_URL: "https://portal.banco-adquirente.example"
+  CORE_URL: "https://core.netpay.internal"
+  LIBRO_MAYOR_RUTA: "/app/datos/libro_mayor.sqlite"
+  EVIDENCIA_RUTA: "/app/evidencia"
+  HORA_LIMITE: "06:00"
+  UMBRAL_APROBACION_CENTAVOS: "5000000"
+  MAX_CONTRACARGOS_COMERCIO_DIA: "3"
+  ENTORNO: "prod"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: conciliador-datos}
+spec: {accessModes: [ReadWriteOnce], resources: {requests: {storage: 5Gi}}}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata: {name: conciliacion-diaria}
+spec:
+  schedule: "0 5 * * 1-6"               # lunes a sábado 05:00; el domingo no hay corte del banco
+  timeZone: "America/Mexico_City"
+  concurrencyPolicy: Forbid             # nunca dos corridas a la vez
+  successfulJobsHistoryLimit: 7
+  failedJobsHistoryLimit: 7
+  jobTemplate:
+    spec:
+      backoffLimit: 1                   # un reintento automático (equivale al "reintento a las 05:20")
+      activeDeadlineSeconds: 1800
+      template:
+        spec:
+          restartPolicy: Never
+          securityContext: {runAsNonRoot: true, runAsUser: 1000, fsGroup: 1000}
+          containers:
+            - name: conciliador
+              image: registry.spin.internal/conciliador:1.0.0   # misma imagen que pasó CI; se promueve por tag
+              args: ["correr", "--json"]                       # la fecha por defecto es ayer
+              envFrom:
+                - configMapRef: {name: conciliador-config}
+                - secretRef: {name: conciliador-secretos}
+              resources: {requests: {cpu: "500m", memory: "1Gi"}, limits: {cpu: "2", memory: "2Gi"}}
+              volumeMounts:
+                - {name: datos, mountPath: /app/datos}
+                - {name: datos, mountPath: /app/evidencia, subPath: evidencia}
+          volumes:
+            - name: datos
+              persistentVolumeClaim: {claimName: conciliador-datos}

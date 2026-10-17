@@ -81,6 +81,85 @@ producción: los inyecta el gestor de secretos. Cambios de adaptador sin tocar c
 | `LLM_PROVEEDOR` / `LLM_MODELO` | `nulo` (determinista) | `anthropic` + `claude-sonnet-5-5`, o `openai_compatible` + modelo interno |
 | `CONCILIADOR_MODO` | `sombra` | `asistida` → `autonoma` según criterios de salida de cada fase |
 
+## Despliegue
+
+El conciliador es un proceso por lotes dentro de un contenedor. No necesita servidor web ni orquestador: una tarea
+programada lo ejecuta cada mañana y el estado vive en el libro mayor. Estos son los pasos, en orden.
+
+### 1. Construir y publicar la imagen
+
+```bash
+docker build -t registry.spin.internal/conciliador:1.0.0 .
+docker push registry.spin.internal/conciliador:1.0.0
+```
+
+La imagen parte de la oficial de Playwright (trae Chromium), corre con el usuario `ubuntu` (uid 1000, sin privilegios)
+y recibe toda la configuración por variables de entorno. CI construye la misma imagen en cada cambio; a producción se
+promueve por tag, nunca se construye aparte.
+
+### 2. Preparar el entorno de producción
+
+| Qué | Cómo |
+|---|---|
+| Secretos (portal del banco, Core, Slack, latido, llave del modelo) | En el gestor de secretos de la plataforma, inyectados como variables de entorno. Nunca en archivos del repo. El gate G-SECRETOS impide arrancar si faltan o traen valores de relleno |
+| Usuario de servicio | Uno para el portal del banco y otro para la UI del Core, distintos de los analistas, con permisos mínimos |
+| Persistencia | Un volumen para `/app/datos` (libro mayor SQLite) y otro para `/app/evidencia` (CSV y capturas), con respaldo diario. Pasar el libro mayor a Postgres es el siguiente paso cuando haya más de un ejecutor; la interfaz `LibroMayor` es la misma |
+| Red | Salida HTTPS al portal del banco, al Core y, si aplica, al proveedor del modelo, a Slack y al monitor de latido |
+| Observabilidad | `SLACK_WEBHOOK_URL`, `LATIDO_URL` (Healthchecks o Cronitor, alerta si no hay corrida a las 05:30), y opcionalmente `CORREO_*`, `TELEGRAM_*`, `SENTRY_DSN` |
+
+### 3. Programar la corrida
+
+Dos opciones listas en `deploy/`:
+
+- **Kubernetes:** [`deploy/cronjob.yaml`](deploy/cronjob.yaml) con Secret, ConfigMap, volumen y CronJob a las 05:00 (lunes a sábado), `concurrencyPolicy: Forbid`, un reintento automático y usuario sin privilegios. Ajusta imagen, URLs y secretos y aplica con `kubectl apply -f deploy/cronjob.yaml`.
+- **Host con Docker y cron:** [`deploy/crontab.example`](deploy/crontab.example) y [`deploy/conciliar.sh`](deploy/conciliar.sh). Corrida a las 05:00, reintento a las 05:20 (es idempotente, no duplica) y tablero a las 05:30.
+
+### 4. Conectar a los sistemas reales
+
+1. **Portal del banco.** Apunta `BANCO_PORTAL_URL` al portal real y ajusta los selectores en `conciliador/adaptadores/banco.py` (`SELECTORES_PORTAL_V1`) a los campos de login y descarga reales. Verifica con `conciliador contrato-portal`. Si el banco ofrece SFTP o correo, conviene más un adaptador de archivo que el robot.
+2. **Core NetPay.** `CORE_URL` y `CORE_API_TOKEN` para leer transacciones y liberar liquidaciones; los nombres de ruta y campos están en `conciliador/adaptadores/core.py` y se ajustan al contrato real de la API. `CORE_UI_USUARIO`/`CORE_UI_CLAVE` y `SELECTORES_CORE_UI_V1` para el bloqueo por interfaz.
+3. **Reglas y tolerancias** acordadas con Operaciones: `TOLERANCIA_MONTO_CENTAVOS`, `TOLERANCIA_DIAS`, `UMBRAL_APROBACION_CENTAVOS`, `MAX_CONTRACARGOS_COMERCIO_DIA`.
+4. **Primera corrida en QA** contra el Core de pruebas con un CSV real anonimizado: `conciliador correr --fecha AAAA-MM-DD --modo sombra`.
+
+### 5. Fases de adopción
+
+| Fase | `CONCILIADOR_MODO` | Qué hace Operaciones cada mañana |
+|---|---|---|
+| Sombra (3 semanas) | `sombra` | Su proceso de siempre; después `conciliador comparar --corrida N` para ver la coincidencia |
+| Asistida | `asistida` | Revisa el reporte y aprueba en lote: `conciliador aprobar --corrida N --aprobador "Nombre"` |
+| Autónoma | `autonoma` | Solo excepciones y doble control; el tablero y las incidencias marcan qué atender |
+
+Cambiar de fase es cambiar una variable; no hay despliegue.
+
+### 6. Operación diaria
+
+```bash
+conciliador reporte --corrida N                 # reporte matutino en Markdown
+conciliador incidencias --abiertas              # qué hay que atender y desde cuándo
+conciliador resolver --incidencia 4 --por "Ana López" --nota "Se repitió la corrida tras recuperar el Core"
+conciliador resolver --excepcion 215 --accion ESCALAR_AL_BANCO --por "Ana López"
+conciliador tablero --dias 30 --salida /srv/tablero/index.html --json /srv/tablero/metricas.json
+```
+
+El tablero es una página estática: se sirve desde cualquier servidor de archivos o se abre directo. El JSON alimenta Grafana o Datadog.
+
+### 7. Actualizar y revertir
+
+Una versión nueva es una imagen nueva con otro tag. El libro mayor es compatible hacia atrás (solo se agregan tablas y
+columnas), así que revertir es volver al tag anterior. Para detener todo sin desplegar: `CONCILIADOR_MODO=sombra` o
+suspender el CronJob (`kubectl patch cronjob conciliacion-diaria -p '{"spec":{"suspend":true}}'`).
+
+### Si algo falla
+
+| Síntoma | Causa probable | Qué hacer |
+|---|---|---|
+| `G-SECRETOS` detiene la corrida | Falta una variable o trae un valor de relleno | Revisar el Secret; la lista exacta la imprime el gate |
+| `G-ESQUEMA` o `G-CONTRATO-PORTAL` fallan | El banco cambió el portal o el archivo | Ajustar selectores o columnas; mientras, `FUENTE_BANCO=archivo` con `BANCO_CSV_MANUAL=/app/datos/manual.csv` |
+| `G-CORE-VIVO` falla | El Core no responde | Nada se tocó; repetir la corrida cuando vuelva (idempotente) |
+| Acciones `FALLIDA` en el reporte | Rechazo del Core (422) o fallo de red | Revisar la respuesta guardada en `acciones`; repetir la corrida o resolver a mano y cerrar la incidencia |
+| El contenedor no puede escribir en `/app/datos` | El volumen no es escribible por el uid 1000 | `chown -R 1000:1000` del directorio en el host, o `fsGroup: 1000` en Kubernetes |
+| El robot falla en Chromium | Falta el navegador (solo fuera de la imagen oficial) | `playwright install --with-deps chromium` |
+
 ## Pruebas
 
 ```bash

@@ -1,0 +1,6 @@
+# Alternativa sin Kubernetes: un host con Docker y cron. Mismo contenedor, mismas variables.
+# Las variables sensibles se cargan desde un archivo que solo lee root (o desde el gestor de secretos al vuelo).
+CRON_TZ=America/Mexico_City
+0  5 * * 1-6  /usr/local/bin/conciliar.sh correr --json >> /var/log/conciliador/corridas.log 2>&1
+20 5 * * 1-6  /usr/local/bin/conciliar.sh correr --json >> /var/log/conciliador/corridas.log 2>&1   # reintento: idempotente, no duplica
+30 5 * * 1-6  /usr/local/bin/conciliar.sh tablero --dias 30 --salida /srv/tablero/index.html
