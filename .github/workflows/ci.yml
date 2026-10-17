@@ -7,6 +7,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
+        with: {enable-cache: false}   # el paso de limpieza de caché falla dentro del contenedor de Playwright
       - run: uv sync --frozen
       - run: uv run ruff check .
       - run: uv run playwright install chromium
