@@ -98,7 +98,7 @@ Un pipeline que corre en mi laptop no resuelve nada a las cinco de la mañana. E
 **Cómo se ve la gestión.** Todo lo que el pipeline decide, ejecuta, detiene o sugiere queda en el libro mayor con su marca de tiempo, y de ahí sale un tablero para el líder de Operaciones: semáforos contra objetivo, pestañas por día, semana y mes, la lista de incidencias abiertas con antigüedad y quién la cerró, la cola de excepciones ordenada por riesgo y monto, y las excepciones que se repiten en un mismo comercio, que son las candidatas a convertirse en regla. Cada falla (corrida detenida, acción fallida, contracargo sin match, gate en rojo) abre una incidencia que alguien tiene que cerrar con su nombre y una nota; cada excepción se cierra registrando qué decidió el analista, lo que permite medir si la sugerencia de la IA le sirvió y cuánto tardó. En el prototipo el tablero es una página que se genera con un comando; en producción las mismas consultas alimentan Grafana o Datadog.
 
 <figure>
-<img src="img/tablero.png" alt="Tablero de gestión" class="evidencia" style="max-width:78%">
+<img src="img/tablero.png" alt="Tablero de gestión" class="evidencia" style="max-width:68%">
 <figcaption>Tablero generado desde el libro mayor con 30 días simulados (semáforos, series por día y detalle; más abajo incidencias y excepciones).</figcaption>
 </figure>
 
