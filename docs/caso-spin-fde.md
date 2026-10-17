@@ -26,7 +26,7 @@ Lo sostienen tres argumentos, que desarrollo en las páginas siguientes: **prote
 
 ## 1. Protege el dinero por diseño
 
-La automatización vale la pena solo si no puede perder dinero por su cuenta. Esa condición define cinco decisiones de diseño.
+Antes de ahorrar tiempo, el sistema tiene que garantizar una cosa: que ningún fallo suyo libere dinero que no debía salir ni deje un contracargo sin bloquear. Las decisiones de diseño que siguen existen para eso.
 
 **Los dos escenarios del caso, tal como operan hoy, los ejecuta el sistema; la persona decide solo lo que tiene problema.** En el escenario A, cuando los datos coinciden según las reglas acordadas, el sistema llama la misma API REST interna de NetPay que hoy ejecuta el analista, con clave de idempotencia y rastro antes y después. En el escenario B, cuando el banco reporta un contracargo, el sistema bloquea el saldo del comercio en el Core por la misma interfaz que hoy usa el analista, mediante un robot que reproduce sus pasos y deja captura de pantalla como evidencia. Bloquear es protector, así que nunca espera aprobación; liberar un monto alto sí.
 
