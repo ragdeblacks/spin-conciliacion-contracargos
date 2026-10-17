@@ -1,0 +1,45 @@
+[project]
+name = "spin-conciliacion-contracargos"
+version = "0.1.0"
+description = "Automatización E2E de contracargos y liquidación: conciliación diaria determinista con triaje asistido por IA"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "anthropic>=0.80",
+    "fastapi>=0.115",
+    "httpx>=0.28",
+    "playwright>=1.50",
+    "pydantic>=2.10",
+    "python-multipart>=0.0.20",
+    "pyyaml>=6.0",
+    "uvicorn[standard]>=0.34",
+]
+
+[project.scripts]
+conciliador = "conciliador.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.9"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["conciliador", "mocks"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["e2e: requiere navegador Playwright y servicios levantados"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 160
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.ruff.lint.per-file-ignores]
+"mocks/**" = ["B008"]   # FastAPI usa Query()/Header() como defaults a propósito
+"tests/**" = ["E501"]

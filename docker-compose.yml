@@ -1,0 +1,53 @@
+# Entorno completo con un comando: portal del banco (mock), Core NetPay (mock) y el conciliador.
+#   docker compose up -d banco-portal core-netpay
+#   docker compose run --rm conciliador correr --fecha 2026-10-15 --modo sombra
+services:
+  banco-portal:
+    build: .
+    entrypoint: ["uvicorn", "mocks.banco_portal.app:app", "--host", "0.0.0.0", "--port", "8001"]
+    environment:
+      BANCO_PORTAL_USUARIO: operaciones
+      BANCO_PORTAL_CLAVE: portal-demo
+      BANCO_API_TOKEN: token-banco-demo
+      BANCO_PORTAL_VERSION: "1"        # "2" simula el cambio de portal del banco
+    ports: ["8001:8001"]
+    healthcheck: {test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8001/health')"], interval: 5s, retries: 10}
+
+  core-netpay:
+    build: .
+    entrypoint: ["uvicorn", "mocks.core_netpay.app:app", "--host", "0.0.0.0", "--port", "8002"]
+    environment:
+      CORE_API_TOKEN: token-core-demo
+      CORE_UI_USUARIO: analista
+      CORE_UI_CLAVE: core-demo
+      CORE_API_BLOQUEO_HABILITADA: "0"  # "1" cuando el equipo del Core exponga la API de bloqueo
+      CORE_FALLAS_PROBABILIDAD: "0.05"  # 5% de 503 al primer intento: reintentos e idempotencia en acción
+    ports: ["8002:8002"]
+    healthcheck: {test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8002/health')"], interval: 5s, retries: 10}
+
+  conciliador:
+    build: .
+    depends_on:
+      banco-portal: {condition: service_healthy}
+      core-netpay: {condition: service_healthy}
+    environment:
+      CONCILIADOR_MODO: ${CONCILIADOR_MODO:-sombra}
+      FUENTE_BANCO: ${FUENTE_BANCO:-portal_rpa}
+      BLOQUEADOR_CORE: ${BLOQUEADOR_CORE:-ui_rpa}
+      LLM_PROVEEDOR: ${LLM_PROVEEDOR:-nulo}
+      LLM_MODELO: ${LLM_MODELO:-claude-sonnet-5-5}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      BANCO_PORTAL_URL: http://banco-portal:8001
+      BANCO_PORTAL_USUARIO: operaciones
+      BANCO_PORTAL_CLAVE: portal-demo
+      BANCO_API_URL: http://banco-portal:8001/api/v2
+      BANCO_API_TOKEN: token-banco-demo
+      CORE_URL: http://core-netpay:8002
+      CORE_API_TOKEN: token-core-demo
+      CORE_UI_USUARIO: analista
+      CORE_UI_CLAVE: core-demo
+      LIBRO_MAYOR_RUTA: /app/datos/libro_mayor.sqlite
+      EVIDENCIA_RUTA: /app/evidencia
+    volumes:
+      - ./datos:/app/datos
+      - ./evidencia:/app/evidencia
