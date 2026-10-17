@@ -34,7 +34,7 @@ La automatización vale la pena solo si no puede perder dinero por su cuenta. Es
 
 **El rastro se escribe antes de tocar el Core, y otra vez después.** El libro mayor registra la intención, después la confirmación o la falla. Si el proceso muere a la mitad, se sabe qué quedó en el aire. Cada decisión guarda la regla que la produjo, la respuesta del Core, la evidencia (captura de pantalla cuando la acción fue por interfaz) y el nombre de quien aprobó.
 
-**Los montos altos y los patrones raros pasan por dos personas.** Una liquidación arriba del umbral acordado con Operaciones, o un comercio con más de tres contracargos en el día, no se ejecutan solos: quedan pendientes hasta que un supervisor los aprueba con su nombre.
+**Liberar un monto alto pasa por dos personas.** Una liquidación arriba del umbral acordado con Operaciones no se ejecuta sola: queda pendiente hasta que un supervisor la aprueba con su nombre. Retener, en cambio, nunca espera: es la dirección segura.
 
 **El sistema desconfía de su entrada.** Un archivo vacío, uno con el triple de movimientos que el promedio histórico o uno con columnas distintas detiene la corrida antes de actuar. Al cierre se verifica que toda acción tenga estado final consistente; cualquier diferencia es una alerta. Los montos se manejan en centavos enteros, nunca en flotantes.
 
@@ -143,5 +143,4 @@ Lo que el prototipo todavía no cubre: corre contra servicios simulados, el libr
 make instalar && make mocks      # dependencias, navegador y servicios simulados
 make demo                        # corrida en modo sombra
 MODO=autonoma make demo          # corrida autónoma
-make tablero                     # 30 días simulados y el tablero de gestión en docs/tablero-demo.html
 ```

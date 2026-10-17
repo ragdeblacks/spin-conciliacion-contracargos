@@ -90,7 +90,7 @@ def main() -> None:
         for i in libro.incidencias(solo_abiertas=True):
             if i["corrida_id"] == r.corrida_id and i["tipo"] != "CONTRACARGO_SIN_MATCH" and n > 2:
                 libro.resolver_incidencia(i["id"], rnd.choice(ANALISTAS), "Revisado y resuelto a mano; registrado en el Core")
-            elif i["corrida_id"] == r.corrida_id and i["tipo"] == "CONTRACARGO_SIN_MATCH" and rnd.random() < 0.8:
+            elif i["corrida_id"] == r.corrida_id and i["tipo"] == "CONTRACARGO_SIN_MATCH" and (n > 3 or rnd.random() < 0.5):
                 libro.resolver_incidencia(i["id"], rnd.choice(ANALISTAS), "Escalado al banco; aclaración recibida")
         libro.con.commit()
     print(
